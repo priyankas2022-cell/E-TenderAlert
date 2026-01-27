@@ -398,6 +398,22 @@
   gap: 10px;
   margin-bottom: 20px;
   flex: 1;
+}
+
+/* Dashboard Row for side-by-side components */
+.dashboard-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+/* Side-by-side cards container */
+.side-by-side-cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  grid-column: span 2;
   width: 100%;
   flex-grow: 1;
   min-height: 0;
@@ -704,7 +720,6 @@
 
 /* Timeline Card */
 .timeline-card {
-  grid-column: 1 / -1;
   min-height: 180px;
 }
 

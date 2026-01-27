@@ -21,24 +21,7 @@ const TelecallerDashboard = () => {
     { id: 4, name: 'Anita Desai', company: 'Power Grid Solutions', time: '3 hours ago', status: 'completed', duration: '6:45' }
   ];
 
-  // Mock data for funnel chart
-  const funnelData = [
-    { stage: 'Incoming Leads', count: 1248, description: 'New prospects from all sources' },
-    { stage: 'Qualified Leads', count: 876, description: 'Leads that match our criteria' },
-    { stage: 'Contacted', count: 654, description: 'Initial contact established' },
-    { stage: 'Converted', count: 248, description: 'Successfully converted to clients' }
-  ];
 
-  // Mock data for bar chart
-  const barChartData = [
-    { day: 'Mon', calls: 120 },
-    { day: 'Tue', calls: 150 },
-    { day: 'Wed', calls: 180 },
-    { day: 'Thu', calls: 140 },
-    { day: 'Fri', calls: 160 },
-    { day: 'Sat', calls: 90 },
-    { day: 'Sun', calls: 70 }
-  ];
 
   // Mock data for reminders
   const reminders = [
@@ -197,99 +180,62 @@ const TelecallerDashboard = () => {
                 </div>
               </div>
 
-              {/* Funnel Chart */}
-              <div className="card chart-card">
-                <div className="card-header">
-                  <h2>Lead Conversion Funnel</h2>
-                </div>
-                <div className="chart-container">
-                  <div className="funnel-chart">
-                    {funnelData.map((stage, index) => (
-                      <div className="funnel-stage" key={index} style={{ width: `${100 - index * 15}%` }}>
-                        <div className="stage-content">
-                          <h3>{stage.count}</h3>
-                          <p>{stage.stage}</p>
-                          <small>{stage.description}</small>
+
+
+
+              <div className="side-by-side-cards">
+                {/* Reminders */}
+                <div className="card reminder-card">
+                  <div className="card-header">
+                    <h2>Upcoming Reminders</h2>
+                    <button className="btn">
+                      <i className="fas fa-plus"></i> Add Reminder
+                    </button>
+                  </div>
+                  <div className="reminders-list">
+                    {reminders.map(reminder => (
+                      <div className={`reminder-item ${getPriorityClass(reminder.priority)}`} key={reminder.id}>
+                        <div className="reminder-content">
+                          <h4>{reminder.title}</h4>
+                          <p>{reminder.description}</p>
+                          <small className="reminder-time">{reminder.time}</small>
+                        </div>
+                        <div className="reminder-actions">
+                          <button className="btn btn-sm">
+                            <i className="fas fa-edit"></i>
+                          </button>
+                          <button className="btn btn-sm">
+                            <i className="fas fa-trash"></i>
+                          </button>
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              {/* Bar Chart */}
-              <div className="card chart-card">
-                <div className="card-header">
-                  <h2>Weekly Call Volume</h2>
-                </div>
-                <div className="chart-container">
-                  <div className="bar-chart">
-                    {barChartData.map((item, index) => (
-                      <div className="bar-container" key={index}>
-                        <div 
-                          className="bar" 
-                          style={{ height: `${(item.calls / 200) * 100}%` }}
-                        >
-                          <span className="bar-value">{item.calls}</span>
-                        </div>
-                        <div className="bar-label">{item.day}</div>
-                      </div>
-                    ))}
+                {/* Activity Timeline Dropdown */}
+                <div className="card timeline-card">
+                  <div className="card-header">
+                    <h2>Activity Timeline</h2>
+                    <button className="dropdown-toggle" onClick={() => setTimelineExpanded(!timelineExpanded)}>
+                      <i className={`fas fa-chevron-${timelineExpanded ? 'up' : 'down'}`}></i>
+                    </button>
                   </div>
-                </div>
-              </div>
-
-              {/* Reminders */}
-              <div className="card reminder-card">
-                <div className="card-header">
-                  <h2>Upcoming Reminders</h2>
-                  <button className="btn">
-                    <i className="fas fa-plus"></i> Add Reminder
-                  </button>
-                </div>
-                <div className="reminders-list">
-                  {reminders.map(reminder => (
-                    <div className={`reminder-item ${getPriorityClass(reminder.priority)}`} key={reminder.id}>
-                      <div className="reminder-content">
-                        <h4>{reminder.title}</h4>
-                        <p>{reminder.description}</p>
-                        <small className="reminder-time">{reminder.time}</small>
-                      </div>
-                      <div className="reminder-actions">
-                        <button className="btn btn-sm">
-                          <i className="fas fa-edit"></i>
-                        </button>
-                        <button className="btn btn-sm">
-                          <i className="fas fa-trash"></i>
-                        </button>
-                      </div>
+                  {timelineExpanded && (
+                    <div className="timeline">
+                      {timelineEvents.map((event, index) => (
+                        <div className="timeline-item" key={index}>
+                          <div className="timeline-marker"></div>
+                          <div className="timeline-content">
+                            <h4>{event.title}</h4>
+                            <p>{event.description}</p>
+                            <small className="timeline-time">{event.time}</small>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
-              </div>
-
-              {/* Activity Timeline Dropdown */}
-              <div className="card timeline-card">
-                <div className="card-header">
-                  <h2>Activity Timeline</h2>
-                  <button className="dropdown-toggle" onClick={() => setTimelineExpanded(!timelineExpanded)}>
-                    <i className={`fas fa-chevron-${timelineExpanded ? 'up' : 'down'}`}></i>
-                  </button>
-                </div>
-                {timelineExpanded && (
-                  <div className="timeline">
-                    {timelineEvents.map((event, index) => (
-                      <div className="timeline-item" key={index}>
-                        <div className="timeline-marker"></div>
-                        <div className="timeline-content">
-                          <h4>{event.title}</h4>
-                          <p>{event.description}</p>
-                          <small className="timeline-time">{event.time}</small>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
             </div>
           </div>

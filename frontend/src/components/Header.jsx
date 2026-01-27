@@ -58,12 +58,6 @@ const Header = () => {
             </div>
             
             <div className="d-flex align-items-center">
-              {/* Telecaller Icon in Navbar */}
-              <div className="telecaller-nav-icon me-3 text-warning fw-bold" onClick={() => scrollToSection('telecaller')}>
-                <i className="fas fa-headset me-1 text-warning"></i>
-                <span>Telecaller</span>
-              </div>
-
               <div className="notification-bell me-3 position-relative">
                 <i className="fas fa-bell fa-lg text-warning"></i>
                 <span className="badge bg-danger position-absolute top-0 start-100 translate-middle fw-bold" style={{fontSize: '0.7rem'}}>3</span>
