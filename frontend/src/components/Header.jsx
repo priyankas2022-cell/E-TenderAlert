@@ -73,38 +73,28 @@ const Header = () => {
             <ul className="navbar-nav ms-auto">
               <li className="nav-item mx-2">
                 <a className="nav-link active text-white fw-bold" href="#">
-                  <i className="fas fa-home me-1 text-warning"></i>
                   Home
                 </a>
               </li>
               <li className="nav-item mx-2">
                 <a className="nav-link text-white fw-bold" onClick={(e) => { e.preventDefault(); scrollToSection('dashboard'); }} href="#dashboard">
-                  <i className="fas fa-tachometer-alt me-1 text-warning"></i>
                   Dashboard
                 </a>
               </li>
               <li className="nav-item mx-2">
                 <a className="nav-link text-white fw-bold" onClick={(e) => { e.preventDefault(); scrollToSection('accepted-tenders'); }} href="#accepted-tenders">
-                  <i className="fas fa-check-circle me-1 text-warning"></i>
                   Accepted
                 </a>
               </li>
               <li className="nav-item mx-2">
                 <a className="nav-link text-white fw-bold" onClick={(e) => { e.preventDefault(); scrollToSection('telecaller'); }} href="#telecaller">
-                  <i className="fas fa-headset me-1 text-warning"></i>
                   Telecaller
                 </a>
               </li>
-              <li className="nav-item mx-2">
-                <Link className="nav-link text-white fw-bold" to="/statistics">
-                  <i className="fas fa-chart-line me-1 text-warning"></i>
-                  Statistics
-                </Link>
-              </li>
+
               {/* LOGIN/SIGNUP BUTTON - NOW FUNCTIONAL */}
               <li className="nav-item mx-2">
                 <a className="nav-link text-warning fw-bold fs-6" href="#" onClick={openLoginSignupModal}>
-                  <i className="fas fa-sign-in-alt me-1 text-warning"></i>
                   Login/SignUp
                 </a>
               </li>

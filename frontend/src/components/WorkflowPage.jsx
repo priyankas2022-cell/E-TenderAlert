@@ -124,7 +124,7 @@ const WorkflowPage = () => {
           <div className="nav-item">Dashboard</div>
           <div className="nav-item">Accepted</div>
           <div className="nav-item">Telecaller</div>
-          <div className="nav-item">Statistics</div>
+
         </div>
         
         <div className="nav-right">

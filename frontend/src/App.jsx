@@ -12,7 +12,6 @@ import TenderAssistant from './components/TenderAssistant';
 import PageHeader from './components/PageHeader';
 import AcceptedTendersTable from './components/AcceptedTendersTable';
 
-import StatisticsPage from './components/StatisticsPage';
 
 function App() {
   // Sample tender data
