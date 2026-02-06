@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import logoImg from '../assets/weblogo.png';
 import LoginSignup from './LoginSignup';
+import Notifications from './Notifications';
+import { useNotifications } from '../context/NotificationContext';
 
 const Header = () => {
   // State for scroll effect
@@ -9,6 +11,12 @@ const Header = () => {
   
   // State for login/signup modal
   const [showLoginSignupModal, setShowLoginSignupModal] = useState(false);
+  
+  // State for notifications
+  const [showNotifications, setShowNotifications] = useState(false);
+  
+  // Use global notification context
+  const { notifications, getUnreadCount } = useNotifications();
   
   // Function to handle scroll effect
   useEffect(() => {
@@ -46,6 +54,23 @@ const Header = () => {
     // Re-enable scrolling when modal is closed
     document.body.style.overflow = 'auto';
   };
+  
+  // Function to toggle notifications
+  const toggleNotifications = () => {
+    setShowNotifications(!showNotifications);
+    // Prevent scrolling when notifications panel is open
+    if (!showNotifications) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+  };
+  
+  // Function to close notifications
+  const closeNotifications = () => {
+    setShowNotifications(false);
+    document.body.style.overflow = 'auto';
+  };
 
   return (
     <header className={scrolled ? 'scrolled' : ''}>
@@ -58,9 +83,11 @@ const Header = () => {
             </div>
             
             <div className="d-flex align-items-center">
-              <div className="notification-bell me-3 position-relative">
+              <div className="notification-bell me-3 position-relative" style={{cursor: 'pointer'}} onClick={toggleNotifications}>
                 <i className="fas fa-bell fa-lg text-warning"></i>
-                <span className="badge bg-danger position-absolute top-0 start-100 translate-middle fw-bold" style={{fontSize: '0.7rem'}}>3</span>
+                <span className="badge bg-danger position-absolute top-0 start-100 translate-middle fw-bold" style={{fontSize: '0.7rem'}}>
+                  {getUnreadCount()}
+                </span>
               </div>
               
               <button className="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -102,6 +129,12 @@ const Header = () => {
           </div>
         </div>
       </nav>
+
+      {/* Notifications Panel */}
+      <Notifications 
+        isOpen={showNotifications}
+        onClose={closeNotifications}
+      />
 
       {/* Login/Signup Modal - Popup on Homepage without dark background */}
       {showLoginSignupModal && (

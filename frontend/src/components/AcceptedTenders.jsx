@@ -20,9 +20,9 @@ const AcceptedTenders = ({
   // Use parent prop if provided and not null, otherwise use local state
   const effectiveSelectedTender = selectedTender != null ? selectedTender : localSelectedTender;
 
-  // ✅ Safe accepted tenders filter
+  // ✅ Safe accepted tenders filter - include accepted tenders and completed tenders
   const acceptedTenders = tenders.filter(
-    t => t.status?.toLowerCase() === 'accepted'
+    t => t.status?.toLowerCase() === 'accepted' || t.status?.toLowerCase() === 'submitted' || t.workflowCompleted === true
   );
 
   const [engineerData, setEngineerData] = useState({

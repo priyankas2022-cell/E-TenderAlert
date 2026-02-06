@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 
 const indianStates = [
   "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
@@ -126,8 +126,111 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
     }
   ];
   
+  // Additional sample tenders to ensure pagination is visible
+  const additionalSampleTenders = [
+    {
+      id: 9,
+      title: "Hospital Equipment Procurement", 
+      department: "Healthcare",
+      location: "Kerala",
+      amount: "₹95 Crores",
+      deadline: "2024-07-25",
+      category: "Hot",
+      status: "Pending",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=hospital+equipment&tt=&si=2&tenders=hospital+equipment+tenders",
+      sector: "Healthcare"
+    },
+    {
+      id: 10,
+      title: "Metro Rail Extension Project",
+      department: "Transportation",
+      location: "Hyderabad",
+      amount: "₹500 Crores",
+      deadline: "2024-08-10",
+      category: "Trending",
+      status: "Pending",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=metro+rail&tt=&si=2&tenders=metro+rail+tenders",
+      sector: "Transportation"
+    },
+    {
+      id: 11,
+      title: "Water Pipeline Network",
+      department: "Water & Waste Management",
+      location: "Haryana",
+      amount: "₹110 Crores",
+      deadline: "2024-09-15",
+      category: "Warm",
+      status: "Step 2",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=water+pipeline&tt=&si=2&tenders=water+pipeline+tenders",
+      sector: "Water & Waste Management"
+    },
+    {
+      id: 12,
+      title: "School Computer Lab Setup",
+      department: "Education",
+      location: "Jammu and Kashmir",
+      amount: "₹40 Crores",
+      deadline: "2024-10-20",
+      category: "Hot",
+      status: "Pending",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=computer+lab&tt=&si=2&tenders=computer+lab+tenders",
+      sector: "Education"
+    },
+    {
+      id: 13,
+      title: "Solar Street Lighting Project",
+      department: "Solar Power Plant",
+      location: "Rajasthan",
+      amount: "₹70 Crores",
+      deadline: "2024-11-05",
+      category: "Trending",
+      status: "Step 4",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=solar+lighting&tt=&si=2&tenders=solar+lighting+tenders",
+      sector: "Energy"
+    },
+    {
+      id: 14,
+      title: "Telecommunication Tower Installation",
+      department: "Telecommunications",
+      location: "Punjab",
+      amount: "₹130 Crores",
+      deadline: "2024-12-12",
+      category: "Warm",
+      status: "Pending",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=telecom+tower&tt=&si=2&tenders=telecom+tower+tenders",
+      sector: "Telecommunications"
+    },
+    {
+      id: 15,
+      title: "Food Grain Storage Facility",
+      department: "Agriculture",
+      location: "Bihar",
+      amount: "₹85 Crores",
+      deadline: "2025-01-18",
+      category: "Hot",
+      status: "Step 6",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=food+grain+storage&tt=&si=2&tenders=food+grain+storage+tenders",
+      sector: "Agriculture"
+    },
+    {
+      id: 16,
+      title: "Airport Terminal Expansion",
+      department: "Transportation",
+      location: "Karnataka",
+      amount: "₹600 Crores",
+      deadline: "2025-02-28",
+      category: "Trending",
+      status: "Pending",
+      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=airport+expansion&tt=&si=2&tenders=airport+expansion+tenders",
+      sector: "Transportation"
+    }
+  ];
+  
+  // Combine original and additional sample tenders
+  const combinedSampleTenders = [...sampleTenders, ...additionalSampleTenders];
+  
   // Use provided tenders or fallback to sample data
-  const allTenders = tenders && tenders.length > 0 ? tenders : sampleTenders;
+  const allTenders = tenders && tenders.length > 0 ? tenders : combinedSampleTenders;
   const [showFilters, setShowFilters] = useState(false);
   const [selectedState, setSelectedState] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
@@ -141,6 +244,26 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
 
   // Local state for tracking accepted tenders for immediate UI feedback
   const [acceptedTenders, setAcceptedTenders] = useState(new Set());
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const ITEMS_PER_PAGE = 6;
+  
+  // Calculate total pages (reactive to filteredTenders changes)
+  const totalPages = useMemo(() => {
+    return Math.ceil(filteredTenders.length / ITEMS_PER_PAGE);
+  }, [filteredTenders.length, ITEMS_PER_PAGE]);
+  
+  // Get the current page items
+  const getCurrentPageItems = () => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filteredTenders.slice(start, start + ITEMS_PER_PAGE);
+  };
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedDepartment, selectedStatus, selectedState, selectedCategory, selectedSector]);
 
   // Effect to handle filtering and search
   useEffect(() => {
@@ -206,6 +329,8 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
       filtered = filtered.filter(tender => tender.sector === selectedSector);
     }
     
+    // Adjust current page if needed when filters change
+    const newTotalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
     setFilteredTenders(filtered);
     
     // Update parent component with current search term
@@ -219,7 +344,18 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
         sector: selectedSector
       });
     }
+    
   }, [searchTerm, selectedDepartment, selectedStatus, selectedState, selectedCategory, selectedSector, allTenders, handleFilterChange]); // Use allTenders in dependency array
+  
+  // Effect to adjust current page when filteredTenders changes
+  useEffect(() => {
+    const newTotalPages = Math.ceil(filteredTenders.length / ITEMS_PER_PAGE);
+    if (currentPage > newTotalPages && newTotalPages > 0) {
+      setCurrentPage(newTotalPages);
+    } else if (newTotalPages === 0) {
+      setCurrentPage(1);
+    }
+  }, [filteredTenders.length, currentPage]);
 
   // Apply filters function
   const handleApplyFilters = () => {
@@ -476,8 +612,8 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
 
           {/* Tender Cards */}
           <div className="row" id="tender-container">
-            {filteredTenders.length > 0 ? (
-              filteredTenders.map(tender => {
+            {getCurrentPageItems().length > 0 ? (
+              getCurrentPageItems().map(tender => {
                 // Check if this tender has been locally marked as accepted by user action
                 const isLocallyAccepted = acceptedTenders.has(tender.id);
                 
@@ -575,6 +711,46 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
               </div>
             )}
           </div>
+          
+          {/* Pagination Controls */}
+          {filteredTenders.length > ITEMS_PER_PAGE && (
+            <div className="pagination-container d-flex justify-content-center mt-4">
+              <nav>
+                <ul className="pagination">
+                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
+                    <button 
+                      className="page-link" 
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                    >
+                      Previous
+                    </button>
+                  </li>
+                  
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNumber => (
+                    <li key={pageNumber} className={`page-item ${currentPage === pageNumber ? 'active' : ''}`}>
+                      <button 
+                        className="page-link" 
+                        onClick={() => setCurrentPage(pageNumber)}
+                      >
+                        {pageNumber}
+                      </button>
+                    </li>
+                  ))}
+                  
+                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
+                    <button 
+                      className="page-link" 
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                    >
+                      Next
+                    </button>
+                  </li>
+                </ul>
+              </nav>
+            </div>
+          )}
         </div>
       </section>
       
