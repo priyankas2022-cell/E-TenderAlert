@@ -1,6 +1,6 @@
 # e-TenderAlert Application
 
-This is a React application with a Node.js backend for tender tracking and analytics.
+This is a React application for tender tracking and analytics with built-in fallback data system.
 
 ## Prerequisites
 
@@ -9,27 +9,22 @@ This is a React application with a Node.js backend for tender tracking and analy
 
 ## Setup Instructions
 
-1. Install dependencies:
+1. Navigate to the frontend directory:
+   ```
+   cd frontend
+   ```
+
+2. Install dependencies:
    ```
    npm install
    ```
 
-2. Build the React application:
+3. Start the development server:
    ```
-   npm run build
-   ```
-
-3. Start the Node.js server:
-   ```
-   npm start
+   npm run dev
    ```
 
-   Or for development with auto-restart:
-   ```
-   npm run dev:server
-   ```
-
-4. Visit the application at http://localhost:5000
+4. Visit the application at http://localhost:5173
 
 ## Development
 
@@ -38,40 +33,21 @@ To run the React development server:
 npm run dev
 ```
 
-To run the Node.js server in development mode:
+To build for production:
 ```
-npm run dev:server
-```
-
-## API Endpoints
-
-- `/api/health` - Health check endpoint
-- `/api/statistics` - All statistics data
-- `/api/statistics/overview` - Overview statistics
-- `/api/statistics/lifecycle` - Tender lifecycle data
-- `/api/statistics/departments` - Department statistics
-- `/api/statistics/authorities` - Top authorities data
-- `/api/statistics/categories` - Category distribution
-- `/api/statistics/values` - Tender values by department
-
-## Project Structure
-
-```
-etender-react/
-├── dist/                  # Built React application
-├── server/                # Node.js server files
-│   ├── routes/            # API route handlers
-│   └── server.js          # Main server file
-├── src/                   # React source files
-│   ├── components/        # React components
-│   └── ...                # Other React files
-├── package.json           # Project dependencies and scripts
-└── ...
+npm run build
 ```
 
 ## Features
 
 - Real-time tender tracking dashboard
 - Statistics visualization with Chart.js
-- RESTful API for data access
+- Built-in fallback data system (works without backend)
+- AI-powered tender intelligence
+- Smart data pipeline visualization
+- Industry coverage across multiple sectors
 - Responsive design for all devices
+
+## Fallback System
+
+The application includes a comprehensive fallback system that ensures all features work even without a backend API connection. Sample tender data is automatically loaded when the API is unavailable.

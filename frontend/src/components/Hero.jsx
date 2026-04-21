@@ -297,6 +297,9 @@ const Hero = () => {
       {/* 3. Smart Data Pipeline */}
       <div className="smart-data-pipeline">
         <div className="container">
+          <div className="section-header-ai">
+            <h2>AI Engine</h2>
+          </div>
           <div className="flex flex-1 gap-10">
             {/* Left Column: Radar Chart & Metrics */}
             <div className="w-2/5 flex flex-col gap-8">
@@ -474,15 +477,18 @@ const Hero = () => {
 
               {/* Info Cards */}
               <div className="flex gap-6 fade-in-up delay-300">
-                <div className="flex-1 glass-panel p-6 flex items-center space-x-6 hover:border-cyan-400 transition-colors border-2 border-cyan-500 shadow-2xl shadow-cyan-500/20">
+                <button 
+                  className="flex-1 glass-panel p-6 flex items-center space-x-6 hover:border-cyan-400 transition-colors border-2 border-cyan-500 shadow-2xl shadow-cyan-500/20 cursor-pointer" 
+                  onClick={() => window.open('https://tender.sieplindia.co.in/', '_blank')}
+                >
                   <div className="w-16 h-16 rounded-full bg-cyan-900 bg-opacity-50 flex items-center justify-center border border-cyan-700">
-                    <i className="fas fa-filter text-cyan-400 text-xl"></i>
+                    <i className="fas fa-file-alt text-cyan-400 text-xl"></i>
                   </div>
                   <div>
-                    <h4 className="font-bold text-xl text-white">Smart Filtering</h4>
-                    <p className="text-sm text-gray-400 mt-2">Removes irrelevant tenders using NLP keyword & intent scoring.</p>
+                    <h4 className="font-bold text-xl text-white">Generate Synopsis</h4>
+                    <p className="text-sm text-gray-400 mt-2">Click to generate tender synopsis and view details.</p>
                   </div>
-                </div>
+                </button>
 
                 <div className="flex-1 glass-panel p-6 flex items-center space-x-6 hover:border-purple-400 transition-colors border-2 border-purple-500 shadow-2xl shadow-purple-500/20">
                   <div className="w-16 h-16 rounded-full bg-purple-900 bg-opacity-50 flex items-center justify-center border border-purple-700">

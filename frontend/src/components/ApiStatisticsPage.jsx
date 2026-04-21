@@ -35,7 +35,7 @@ const ApiStatisticsPage = () => {
     const fetchStatistics = async () => {
       try {
         setLoading(true);
-        const response = await fetch('/api/statistics');
+        const response = await fetch('http://localhost:8000/api/statistics/');
         if (!response.ok) {
           throw new Error(`HTTP error! status: ${response.status}`);
         }

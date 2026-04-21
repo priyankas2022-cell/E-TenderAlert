@@ -90,6 +90,14 @@
   overflow-x: clip;
 }
 
+.industry-coverage-section .section-header-ai h2 {
+  color: #000080;
+}
+
+.industry-coverage-section .section-header-ai p {
+  color: #000080;
+}
+
 .industry-coverage-layout {
   display: flex;
   gap: 30px;

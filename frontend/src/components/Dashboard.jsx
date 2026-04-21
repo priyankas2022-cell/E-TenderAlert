@@ -1,392 +1,173 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import apiClient from '../api/client';
+import PaginationControls from './PaginationControls';
+import { FALLBACK_TENDERS } from '../utils/fallbackData';
+
 
 const indianStates = [
-  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh", 
-  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand", 
-  "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur", 
-  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab", 
-  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura", 
-  "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands", 
+  "Andhra Pradesh", "Arunachal Pradesh", "Assam", "Bihar", "Chhattisgarh",
+  "Goa", "Gujarat", "Haryana", "Himachal Pradesh", "Jharkhand",
+  "Karnataka", "Kerala", "Madhya Pradesh", "Maharashtra", "Manipur",
+  "Meghalaya", "Mizoram", "Nagaland", "Odisha", "Punjab",
+  "Rajasthan", "Sikkim", "Tamil Nadu", "Telangana", "Tripura",
+  "Uttar Pradesh", "Uttarakhand", "West Bengal", "Andaman and Nicobar Islands",
   "Chandigarh", "Dadra and Nagar Haveli and Daman and Diu", "Delhi", "Lakshadweep", "Puducherry"
 ];
 
-const statusOptions = ["Accepted", "Rejected", "Pending", "Step 1", "Step 2", "Step 3", "Step 4", "Step 5", "Step 6", "Step 7", "Step 8"];
-const categoryOptions = ["Trending", "Hot", "Warm", "Accepted"];
+const statusOptions = ["Active", "Closed", "Cancelled", "Awarded"];
+const categoryOptions = ["Trending", "Hot", "Warm", "Pending"];
 const departmentOptions = [
-  "Solar Power Plant", "RESCO", "Street Lights", "Highmast", "Home Lighting System", 
-  "Pump Polarization", "Module Supply", "EV Charger", "BESS", "Drone", 
-  "Carbon Capture", "Cold Storage", "Bio Fuel", "Green Ammonia", "Green Hydrogen", 
+  "Solar Power Plant", "RESCO", "Street Lights", "Highmast", "Home Lighting System",
+  "Pump Polarization", "Module Supply", "EV Charger", "BESS", "Drone",
+  "Carbon Capture", "Cold Storage", "Bio Fuel", "Green Ammonia", "Green Hydrogen",
   "Electrolyser", "Methanol", "Ethanol", "CBG", "TESS", "Fuel Cell"
 ];
 
 const sectorOptions = [
-  "Infrastructure", "Energy", "Telecommunications", "Transportation", "Healthcare", 
-  "Education", "Agriculture", "Manufacturing", "IT Services", "Banking & Finance", 
+  "Infrastructure", "Energy", "Telecommunications", "Transportation", "Healthcare",
+  "Education", "Agriculture", "Manufacturing", "IT Services", "Banking & Finance",
   "Oil & Gas", "Mining", "Water & Waste Management", "Defense", "Space"
 ];
 
-const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, handleRejectTender, isTenderCompleted }) => {
-  // Sample tender data to use if no tenders are provided
-  const sampleTenders = [
-    {
-      id: 1,
-      title: "Solar Power Plant Installation", 
-      department: "Solar Power Plant",
-      location: "Maharashtra",
-      amount: "₹150 Crores",
-      deadline: "2024-06-30",
-      category: "Trending",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=Solar+Battery&tt=&si=2&tenders=Solar+Battery+tenders",
-      sector: "Energy"
-    },
-    {
-      id: 2,
-      title: "Smart City Infrastructure Development",
-      department: "Infrastructure",
-      location: "Karnataka",
-      amount: "₹300 Crores",
-      deadline: "2024-07-15",
-      category: "Hot",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=smart+city&tt=&si=2&tenders=smart+city+tenders",
-      sector: "Infrastructure"
-    },
-    {
-      id: 3,
-      title: "Rural Road Construction",
-      department: "Highways",
-      location: "Uttar Pradesh",
-      amount: "₹80 Crores",
-      deadline: "2024-08-20",
-      category: "Warm",
-      status: "Step 1",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=Rural+Water+Supply+Scheme&tt=&si=2&tenders=Rural+Water+Supply+Scheme+tenders",
-      sector: "Infrastructure"
-    },
-    {
-      id: 4,
-      title: "EV Charging Station Setup",
-      department: "EV Charger",
-      location: "Gujarat",
-      amount: "₹45 Crores",
-      deadline: "2024-09-10",
-      category: "Hot",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=Electric+Vehicle&tt=&si=2&tenders=Electric+Vehicle+tenders",
-      sector: "Energy"
-    },
-    {
-      id: 5,
-      title: "Water Treatment Plant",
-      department: "Water & Waste Management",
-      location: "Tamil Nadu",
-      amount: "₹120 Crores",
-      deadline: "2024-10-05",
-      category: "Trending",
-      status: "Step 3",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=Water&tt=&si=2&tenders=Water+tenders",
-      sector: "Water & Waste Management"
-    },
-    {
-      id: 6,
-      title: "Telemedicine Equipment Supply",
-      department: "Healthcare",
-      location: "Delhi",
-      amount: "₹65 Crores",
-      deadline: "2024-11-12",
-      category: "Warm",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=telemedicine&tt=&si=2&tenders=telemedicine+tenders",
-      sector: "Healthcare"
-    },
-    {
-      id: 7,
-      title: "School Building Construction",
-      department: "Education",
-      location: "Rajasthan",
-      amount: "₹90 Crores",
-      deadline: "2024-12-25",
-      category: "Warm",
-      status: "Step 5",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=Building&tt=&si=2&tenders=Building+tenders",
-      sector: "Education"
-    },
-    {
-      id: 8,
-      title: "Agriculture Equipment Procurement",
-      department: "Agriculture",
-      location: "Punjab",
-      amount: "₹75 Crores",
-      deadline: "2024-05-30",
-      category: "Hot",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=Agriculture+Tool&tt=&si=2&tenders=Agriculture+Tool+tenders",
-      sector: "Agriculture"
-    }
-  ];
-  
-  // Additional sample tenders to ensure pagination is visible
-  const additionalSampleTenders = [
-    {
-      id: 9,
-      title: "Hospital Equipment Procurement", 
-      department: "Healthcare",
-      location: "Kerala",
-      amount: "₹95 Crores",
-      deadline: "2024-07-25",
-      category: "Hot",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=hospital+equipment&tt=&si=2&tenders=hospital+equipment+tenders",
-      sector: "Healthcare"
-    },
-    {
-      id: 10,
-      title: "Metro Rail Extension Project",
-      department: "Transportation",
-      location: "Hyderabad",
-      amount: "₹500 Crores",
-      deadline: "2024-08-10",
-      category: "Trending",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=metro+rail&tt=&si=2&tenders=metro+rail+tenders",
-      sector: "Transportation"
-    },
-    {
-      id: 11,
-      title: "Water Pipeline Network",
-      department: "Water & Waste Management",
-      location: "Haryana",
-      amount: "₹110 Crores",
-      deadline: "2024-09-15",
-      category: "Warm",
-      status: "Step 2",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=water+pipeline&tt=&si=2&tenders=water+pipeline+tenders",
-      sector: "Water & Waste Management"
-    },
-    {
-      id: 12,
-      title: "School Computer Lab Setup",
-      department: "Education",
-      location: "Jammu and Kashmir",
-      amount: "₹40 Crores",
-      deadline: "2024-10-20",
-      category: "Hot",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=computer+lab&tt=&si=2&tenders=computer+lab+tenders",
-      sector: "Education"
-    },
-    {
-      id: 13,
-      title: "Solar Street Lighting Project",
-      department: "Solar Power Plant",
-      location: "Rajasthan",
-      amount: "₹70 Crores",
-      deadline: "2024-11-05",
-      category: "Trending",
-      status: "Step 4",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=solar+lighting&tt=&si=2&tenders=solar+lighting+tenders",
-      sector: "Energy"
-    },
-    {
-      id: 14,
-      title: "Telecommunication Tower Installation",
-      department: "Telecommunications",
-      location: "Punjab",
-      amount: "₹130 Crores",
-      deadline: "2024-12-12",
-      category: "Warm",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=telecom+tower&tt=&si=2&tenders=telecom+tower+tenders",
-      sector: "Telecommunications"
-    },
-    {
-      id: 15,
-      title: "Food Grain Storage Facility",
-      department: "Agriculture",
-      location: "Bihar",
-      amount: "₹85 Crores",
-      deadline: "2025-01-18",
-      category: "Hot",
-      status: "Step 6",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=food+grain+storage&tt=&si=2&tenders=food+grain+storage+tenders",
-      sector: "Agriculture"
-    },
-    {
-      id: 16,
-      title: "Airport Terminal Expansion",
-      department: "Transportation",
-      location: "Karnataka",
-      amount: "₹600 Crores",
-      deadline: "2025-02-28",
-      category: "Trending",
-      status: "Pending",
-      source: "https://www.orissatenders.in/quicksearch.aspx?st=qs&SerCat=38&SerText=airport+expansion&tt=&si=2&tenders=airport+expansion+tenders",
-      sector: "Transportation"
-    }
-  ];
-  
-  // Combine original and additional sample tenders
-  const combinedSampleTenders = [...sampleTenders, ...additionalSampleTenders];
-  
-  // Use provided tenders or fallback to sample data
-  const allTenders = tenders && tenders.length > 0 ? tenders : combinedSampleTenders;
-  const [showFilters, setShowFilters] = useState(false);
-  const [selectedState, setSelectedState] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState('');
-  const [selectedDepartment, setSelectedDepartment] = useState('');
-  const [selectedSector, setSelectedSector] = useState('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filteredTenders, setFilteredTenders] = useState(allTenders);  // Initialize with allTenders
-  const filterRef = useRef(null);
-  const searchInputRef = useRef(null);
+const Dashboard = ({ handleFilterChange, filter, handleAcceptTender, handleRejectTender, isTenderCompleted, acceptedTenderIds = [] }) => {
 
-  // Local state for tracking accepted tenders for immediate UI feedback
-  const [acceptedTenders, setAcceptedTenders] = useState(new Set());
-  
-  // Pagination state
+  // State for tenders and API status - Initialize with fallback data
+  const [tenderList, setTenderList] = useState(FALLBACK_TENDERS);
+  const [loading, setLoading] = useState(false); // Start with false since we have fallback data
+  const [error, setError] = useState(null);
+  const [totalCount, setTotalCount] = useState(FALLBACK_TENDERS.length);
   const [currentPage, setCurrentPage] = useState(1);
   const ITEMS_PER_PAGE = 6;
-  
-  // Calculate total pages (reactive to filteredTenders changes)
-  const totalPages = useMemo(() => {
-    return Math.ceil(filteredTenders.length / ITEMS_PER_PAGE);
-  }, [filteredTenders.length, ITEMS_PER_PAGE]);
-  
-  // Get the current page items
-  const getCurrentPageItems = () => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return filteredTenders.slice(start, start + ITEMS_PER_PAGE);
-  };
-  
+
+  // Local state for tracking accepted tenders for immediate UI feedback
+  // Initialize from localStorage and parent props
+  const [acceptedTenders, setAcceptedTenders] = useState(() => {
+    const saved = localStorage.getItem('acceptedTenders');
+    const savedSet = saved ? new Set(JSON.parse(saved)) : new Set();
+    // Merge with parent-provided accepted IDs
+    acceptedTenderIds.forEach(id => savedSet.add(id));
+    return savedSet;
+  });
+
+  // State for filters
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedDepartment, setSelectedDepartment] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('');
+  const [selectedState, setSelectedState] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
+  const [selectedSector, setSelectedSector] = useState('');
+  const [selectedDate, setSelectedDate] = useState('');
+
+  const searchInputRef = useRef(null);
+  const dateInputRef = useRef(null);
+
+  // Fetch tenders from API
+  useEffect(() => {
+    const fetchTendersFromApi = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const params = {
+          page: currentPage,
+          page_size: ITEMS_PER_PAGE,
+          search: searchTerm,
+          status: selectedStatus.toUpperCase(),
+          temperature: selectedCategory.toUpperCase(),
+          department: selectedDepartment,
+          location: selectedState,
+          sector: selectedSector,
+        };
+
+        // Clean up empty params
+        Object.keys(params).forEach(key => {
+          if (!params[key]) delete params[key];
+        });
+
+        console.log('Fetching tenders from API with params:', params);
+        const data = await apiClient.getTenders(params);
+        console.log('API Response:', data);
+        setTenderList(data.results || []);
+        setTotalCount(data.count || 0);
+        console.log('Tender list updated with', data.results?.length || 0, 'items');
+      } catch (err) {
+        console.error("Error fetching tenders:", err);
+        console.log('Using fallback tenders:', FALLBACK_TENDERS.length, 'items');
+        setError("Offline Mode: Backend connection failed. Showing fallback tenders.");
+        
+        // Filter fallback tenders based on search term (including tender_id)
+        let filteredTenders = FALLBACK_TENDERS;
+        
+        // Filter by search term
+        if (searchTerm) {
+          const searchLower = searchTerm.toLowerCase();
+          filteredTenders = filteredTenders.filter(tender => {
+            return (
+              (tender.title && tender.title.toLowerCase().includes(searchLower)) ||
+              (tender.department && tender.department.toLowerCase().includes(searchLower)) ||
+              (tender.location && tender.location.toLowerCase().includes(searchLower)) ||
+              (tender.tender_id && tender.tender_id.toLowerCase().includes(searchLower)) ||
+              (tender.id && tender.id.toLowerCase().includes(searchLower)) ||
+              (tender.bid_deadline && tender.bid_deadline.toLowerCase().includes(searchLower))
+            );
+          });
+        }
+        
+        // Filter by selected date
+        if (selectedDate) {
+          filteredTenders = filteredTenders.filter(tender => {
+            return tender.bid_deadline && tender.bid_deadline.includes(selectedDate);
+          });
+        }
+        
+        setTenderList(filteredTenders);
+        setTotalCount(filteredTenders.length);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchTendersFromApi();
+  }, [currentPage, searchTerm, selectedDepartment, selectedStatus, selectedState, selectedCategory, selectedSector, selectedDate]);
+
+  const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
   // Reset to page 1 when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedDepartment, selectedStatus, selectedState, selectedCategory, selectedSector]);
+  }, [searchTerm, selectedDepartment, selectedStatus, selectedCategory, selectedState, selectedSector, selectedDate]);
 
-  // Effect to handle filtering and search
+  // Sync with parent-provided accepted tender IDs
   useEffect(() => {
-    let filtered = [...allTenders]; // Use allTenders instead of props tenders
-    
-    // Apply search filter - enhanced to search across all relevant fields with improved matching
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase().trim();
-      
-      // If search term is empty after trimming, don't filter
-      if (term.length > 0) {
-        filtered = filtered.filter(tender => {
-          // Normalize and prepare fields for comparison
-          const title = tender.title.toLowerCase();
-          const department = tender.department.toLowerCase();
-          const location = tender.location.toLowerCase();
-          const category = tender.category.toLowerCase();
-          const status = tender.status.toLowerCase();
-          
-          // Split search term into words for more flexible matching
-          const searchWords = term.split(/\s+/).filter(word => word.length > 0);
-          
-          // Check if any search word matches any field
-          return searchWords.some(word => 
-            title.includes(word) ||
-            department.includes(word) ||
-            location.includes(word) ||
-            category.includes(word) ||
-            status.includes(word) ||
-            // Also check if the full term matches any field (for phrases)
-            title.includes(term) ||
-            department.includes(term) ||
-            location.includes(term) ||
-            category.includes(term) ||
-            status.includes(term)
-          );
-        });
-      }
-    }
-    
-    // Apply department filter
-    if (selectedDepartment) {
-      filtered = filtered.filter(tender => tender.department === selectedDepartment);
-    }
-
-    // Apply status filter
-    if (selectedStatus) {
-      filtered = filtered.filter(tender => getStatusDisplayName(tender.status) === selectedStatus);
-    }
-
-    // Apply state filter
-    if (selectedState) {
-      filtered = filtered.filter(tender => tender.location === selectedState);
-    }
-
-    // Apply category filter
-    if (selectedCategory) {
-      filtered = filtered.filter(tender => getCategoryDisplayName(tender.category) === selectedCategory);
-    }
-
-    // Apply sector filter
-    if (selectedSector) {
-      filtered = filtered.filter(tender => tender.sector === selectedSector);
-    }
-    
-    // Adjust current page if needed when filters change
-    const newTotalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE);
-    setFilteredTenders(filtered);
-    
-    // Update parent component with current search term
-    if (handleFilterChange) {
-      handleFilterChange({
-        searchTerm: searchTerm,
-        department: selectedDepartment,
-        status: selectedStatus,
-        location: selectedState,
-        priority: selectedCategory,
-        sector: selectedSector
+    if (acceptedTenderIds.length > 0) {
+      setAcceptedTenders(prev => {
+        const newSet = new Set(prev);
+        acceptedTenderIds.forEach(id => newSet.add(id));
+        return newSet;
       });
     }
-    
-  }, [searchTerm, selectedDepartment, selectedStatus, selectedState, selectedCategory, selectedSector, allTenders, handleFilterChange]); // Use allTenders in dependency array
-  
-  // Effect to adjust current page when filteredTenders changes
-  useEffect(() => {
-    const newTotalPages = Math.ceil(filteredTenders.length / ITEMS_PER_PAGE);
-    if (currentPage > newTotalPages && newTotalPages > 0) {
-      setCurrentPage(newTotalPages);
-    } else if (newTotalPages === 0) {
-      setCurrentPage(1);
+  }, [acceptedTenderIds]);
+
+  // Handle search input change
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setSearchTerm(value);
+  };
+
+  // Handle date selection
+  const handleDateChange = (e) => {
+    setSelectedDate(e.target.value);
+  };
+
+  // Trigger calendar click
+  const handleCalendarClick = () => {
+    if (dateInputRef.current) {
+      dateInputRef.current.showPicker();
     }
-  }, [filteredTenders.length, currentPage]);
+  };
 
   // Apply filters function
   const handleApplyFilters = () => {
-    let filtered = [...allTenders]; // Use allTenders instead of props tenders
-
-    // Apply department filter
-    if (selectedDepartment) {
-      filtered = filtered.filter(tender => tender.department === selectedDepartment);
-    }
-
-    // Apply status filter
-    if (selectedStatus) {
-      filtered = filtered.filter(tender => getStatusDisplayName(tender.status) === selectedStatus);
-    }
-
-    // Apply state filter
-    if (selectedState) {
-      filtered = filtered.filter(tender => tender.location === selectedState);
-    }
-
-    // Apply category filter
-    if (selectedCategory) {
-      filtered = filtered.filter(tender => getCategoryDisplayName(tender.category) === selectedCategory);
-    }
-
-    // Apply sector filter
-    if (selectedSector) {
-      filtered = filtered.filter(tender => tender.sector === selectedSector);
-    }
-
-    setFilteredTenders(filtered);
+    setCurrentPage(1);
   };
 
   // Reset filters function
@@ -397,10 +178,9 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
     setSelectedDepartment('');
     setSelectedSector('');
     setSearchTerm('');
-    
-    // Reset to all tenders
-    setFilteredTenders(allTenders);  // Use allTenders instead of props tenders
-    
+    setSelectedDate('');
+    setCurrentPage(1);
+
     // Update parent filter
     if (handleFilterChange) {
       handleFilterChange({
@@ -414,31 +194,26 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
     }
   };
 
-  // Helper function to get display name for status
-  const getStatusDisplayName = (status) => {
-    if (!status) return '';
-    return status.charAt(0).toUpperCase() + status.slice(1);
-  };
-
-  // Helper function to get display name for category
-  const getCategoryDisplayName = (category) => {
-    if (!category) return '';
-    return category.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-  };
-
-  // Handle search input change
-  const handleSearchChange = (e) => {
-    setSearchTerm(e.target.value);
-  };
-
   // Handle search button click
   const handleSearchClick = (e) => {
-    // Prevent any default button behavior that might clear the input
     if (e && e.preventDefault) {
       e.preventDefault();
     }
-    // The search is already happening via useEffect when searchTerm changes
-    // This ensures search runs when button is clicked
+  };
+
+  // Helper function to get display name for status
+  const getStatusDisplayName = (status) => {
+    if (!status) return '';
+    return status.charAt(0).toUpperCase() + status.slice(1).toLowerCase();
+  };
+
+  // Helper function to get display name for category/temperature
+  const getCategoryDisplayName = (category) => {
+    if (!category) return '';
+    if (category === 'HOT') return 'Hot';
+    if (category === 'WARM') return 'Warm';
+    if (category === 'TRENDING') return 'Trending';
+    return category.charAt(0).toUpperCase() + category.slice(1).toLowerCase();
   };
 
   return (
@@ -450,28 +225,65 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
             <p>Discover relevant tenders based on your business keywords</p>
           </div>
 
+          {/* Offline Mode Banner */}
+          {error && (
+            <div style={{
+              backgroundColor: '#fff3cd',
+              border: '1px solid #ffc107',
+              borderRadius: '8px',
+              padding: '12px 20px',
+              marginBottom: '20px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <i className="fas fa-exclamation-triangle" style={{ color: '#856404', fontSize: '1.2rem' }}></i>
+                <span style={{ color: '#856404', fontWeight: '500' }}>
+                  {error} - Displaying {tenderList.length} sample tenders
+                </span>
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                style={{
+                  backgroundColor: '#856404',
+                  color: 'white',
+                  border: 'none',
+                  padding: '6px 16px',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '0.9rem',
+                  fontWeight: '500'
+                }}
+              >
+                <i className="fas fa-sync-alt"></i> Retry
+              </button>
+            </div>
+          )}
+
           {/* Enhanced Search Bar */}
           <div className="search-container animate__animated animate__fadeInUp">
             <div className="row">
               <div className="col-md-12">
                 <div className="search-input-container">
-                  <input 
-                    type="text" 
-                    className="form-control search-input" 
-                    placeholder="search tenders by keywords, department or location" 
+                  <input
+                    type="text"
+                    className="form-control search-input"
+                    placeholder="Search tenders by keywords, department, location, Tender ID or Date"
                     value={searchTerm}
                     onChange={handleSearchChange}
                     ref={searchInputRef}
                   />
                   {searchTerm && (
-                    <button 
-                      className="btn clear-btn" 
-                      type="button" 
+                    <button
+                      className="btn clear-btn"
+                      type="button"
                       onClick={() => {
                         setSearchTerm('');
                         // Also reset filtered tenders to show all when clearing search
                         let filtered = [...allTenders];
-                        
+
                         // Apply other filters if they exist
                         if (selectedDepartment) {
                           filtered = filtered.filter(tender => tender.department === selectedDepartment);
@@ -488,7 +300,7 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                         if (selectedSector) {
                           filtered = filtered.filter(tender => tender.sector === selectedSector);
                         }
-                        
+
                         setFilteredTenders(filtered);
                       }}
                     >
@@ -497,13 +309,13 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                   )}
                   <button className="btn search-btn" type="button" onClick={handleSearchClick} onMouseDown={(e) => e.preventDefault()}><i className="fas fa-search"></i> Search</button>
                 </div>
-                
+
                 {/* Filter Controls - Visible Inline Beside Search */}
                 <div className="filter-controls mt-3">
                   <div className="row g-2">
                     <div className="col-md-2">
                       <label><i className="fas fa-building"></i> Department</label>
-                      <select 
+                      <select
                         className="form-control filter-select"
                         value={selectedDepartment}
                         onChange={(e) => {
@@ -519,10 +331,10 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="col-md-2">
                       <label><i className="fas fa-flag"></i> Status</label>
-                      <select 
+                      <select
                         className="form-control filter-select"
                         value={selectedStatus}
                         onChange={(e) => {
@@ -538,10 +350,10 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="col-md-2">
                       <label><i className="fas fa-map-marker-alt"></i> Location</label>
-                      <select 
+                      <select
                         className="form-control filter-select"
                         value={selectedState}
                         onChange={(e) => {
@@ -557,10 +369,10 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="col-md-2">
                       <label><i className="fas fa-star"></i> Priority</label>
-                      <select 
+                      <select
                         className="form-control filter-select"
                         value={selectedCategory}
                         onChange={(e) => {
@@ -572,14 +384,14 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                       >
                         <option value="">All</option>
                         {categoryOptions.map((category, index) => (
-                          <option key={index} value={category}>{category}</option>
+                          <option key={index} value={category.toUpperCase()}>{category}</option>
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="col-md-2">
                       <label><i className="fas fa-industry"></i> Sector</label>
-                      <select 
+                      <select
                         className="form-control filter-select"
                         value={selectedSector}
                         onChange={(e) => {
@@ -595,10 +407,45 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
                         ))}
                       </select>
                     </div>
-                    
+
                     <div className="col-md-2">
                       <label>&nbsp;</label> {/* Spacer for alignment */}
-                      <div className="d-grid gap-2">
+                      <div className="d-flex gap-2">
+                        <button 
+                          className="btn btn-outline-primary" 
+                          onClick={handleCalendarClick}
+                          title="Filter by date"
+                          style={{
+                            borderColor: selectedDate ? '#007bff' : '#6c757d',
+                            color: selectedDate ? '#007bff' : '#6c757d',
+                            position: 'relative'
+                          }}
+                        >
+                          <i className="fas fa-calendar-alt"></i>
+                        </button>
+                        <input
+                          type="date"
+                          ref={dateInputRef}
+                          value={selectedDate}
+                          onChange={handleDateChange}
+                          style={{
+                            position: 'absolute',
+                            opacity: 0,
+                            width: '1px',
+                            height: '1px',
+                            pointerEvents: 'none'
+                          }}
+                        />
+                        {selectedDate && (
+                          <button
+                            className="btn btn-outline-danger"
+                            onClick={() => setSelectedDate('')}
+                            title="Clear date filter"
+                            style={{ padding: '0.375rem 0.75rem' }}
+                          >
+                            <i className="fas fa-times"></i>
+                          </button>
+                        )}
                         <button className="btn btn-outline-secondary" onClick={handleResetFilters}>
                           <i className="fas fa-redo"></i> Reset
                         </button>
@@ -611,97 +458,118 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
           </div>
 
           {/* Tender Cards */}
-          <div className="row" id="tender-container">
-            {getCurrentPageItems().length > 0 ? (
-              getCurrentPageItems().map(tender => {
-                // Check if this tender has been locally marked as accepted by user action
-                const isLocallyAccepted = acceptedTenders.has(tender.id);
-                
-                return (
-                <div key={tender.id} className={`col-lg-6 mb-4 tender-card ${tender.status} animate__animated animate__fadeInUp`}>
-                  <div className="tender-header">
-                    <div>
-                      <div className="tender-title">{tender.title}</div>
-                      <div className="tender-department">{tender.department}</div>
-                    </div>
-                    <span className={`tender-status status-${tender.originalStatus || tender.status}`}>{getStatusDisplayName(tender.originalStatus || tender.status)}</span>
-                  </div>
-                  <div className="tender-body">
-                    <div className="tender-details">
-                      <div className="tender-detail">
-                        <i className="fas fa-map-marker-alt"></i> {tender.location}
+          <div className="row" id="tender-container" style={{ minHeight: '400px', position: 'relative' }}>
+            {loading ? (
+              // Loading Skeletons
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={`skeleton-${i}`} className="col-lg-6 mb-4">
+                  <div className="tender-card" style={{ height: '350px', background: '#f8f9fa' }}>
+                    <div className="p-4">
+                      <div className="skeleton-line" style={{ width: '70%', height: '24px', background: '#e9ecef', marginBottom: '15px' }}></div>
+                      <div className="skeleton-line" style={{ width: '40%', height: '16px', background: '#e9ecef', marginBottom: '25px' }}></div>
+                      <div className="skeleton-line" style={{ width: '90%', height: '14px', background: '#e9ecef', marginBottom: '10px' }}></div>
+                      <div className="skeleton-line" style={{ width: '90%', height: '14px', background: '#e9ecef', marginBottom: '10px' }}></div>
+                      <div className="skeleton-line" style={{ width: '90%', height: '14px', background: '#e9ecef', marginBottom: '10px' }}></div>
+                      <div className="mt-4 flex gap-2">
+                        <div className="skeleton-btn" style={{ width: '100px', height: '40px', background: '#e9ecef' }}></div>
+                        <div className="skeleton-btn" style={{ width: '100px', height: '40px', background: '#e9ecef' }}></div>
                       </div>
-                      <div className="tender-detail">
-                        <i className="fas fa-rupee-sign"></i> {tender.amount}
-                      </div>
-                      <div className="tender-detail">
-                        <i className="fas fa-calendar-alt"></i> Deadline: {tender.deadline}
-                      </div>
-                      <div className="tender-detail">
-                        <i className="fas fa-tag"></i> Category: {getCategoryDisplayName(tender.category)}
-                      </div>
-                      <div className="tender-detail">
-                        <i className="fas fa-info-circle"></i> Status: {getStatusDisplayName(tender.status)}
-                      </div>
-                    </div>
-                    <div className="tender-actions">
-                      <a href={tender.source} target="_blank" className="btn btn-outline-primary">
-                        <i className="fas fa-external-link-alt me-2"></i> Source
-                      </a>
-                      {isLocallyAccepted && isTenderCompleted(tender) ? (
-                        <button className="btn btn-accept bid-completed" disabled>
-                          <i className="fas fa-check-circle me-2"></i> Bid Applied Successfully
-                        </button>
-                      ) : isLocallyAccepted ? (
-                        <button className="btn btn-accept accepted-state" disabled>
-                          <i className="fas fa-check me-2"></i> Accepted
-                        </button>
-                      ) : (
-                        <button 
-                          className="btn btn-accept" 
-                          onClick={() => {
-                            // Immediately mark as accepted in local state for instant UI feedback
-                            setAcceptedTenders(prev => new Set([...prev, tender.id]));
-                            
-                            // Call the parent function to update the main state
-                            handleAcceptTender(tender.id);
-                            
-                            // Show success feedback
-                            const tenderCard = document.querySelector(`[data-tender-id="${tender.id}"]`);
-                            if (tenderCard) {
-                              tenderCard.classList.add('accept-animation');
-                              setTimeout(() => {
-                                tenderCard.classList.remove('accept-animation');
-                              }, 1000);
-                            }
-                          }}
-                          data-tender-id={tender.id}
-                        >
-                          <i className="fas fa-check me-2"></i> Accept
-                        </button>
-                      )}
-
-                      <button className="btn btn-reject" onClick={() => {
-                        if (window.confirm(`Are you sure you want to reject "${tender.title}"?`)) {
-                          handleRejectTender(tender.id);
-                          
-                          // Also remove from local accepted tenders if it was there
-                          setAcceptedTenders(prev => {
-                            const newSet = new Set(prev);
-                            newSet.delete(tender.id);
-                            return newSet;
-                          });
-                        }
-                      }}>
-                        <i className="fas fa-times me-2"></i> Reject
-                      </button>
                     </div>
                   </div>
                 </div>
-                )})
+              ))
+            ) : tenderList.length > 0 ? (
+              tenderList.map(tender => {
+                const isLocallyAccepted = acceptedTenders.has(tender.id);
+                const displayStatus = (tender.status || 'PENDING').toUpperCase();
+                const displayTemperature = (tender.temperature || 'PENDING').toUpperCase();
+
+                return (
+                  <div key={tender.id} data-tender-id={tender.id} className={`col-lg-6 mb-4 tender-card ${displayStatus.toLowerCase()} animate__animated animate__fadeInUp`} style={{ display: 'flex', flexDirection: 'column' }}>
+                    <div className="tender-header">
+                      <div style={{ flex: 1 }}>
+                        <div className="tender-title" title={tender.title}>{tender.title}</div>
+                        <div className="tender-department">{tender.department || 'N/A'}</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px' }}>
+                        <span className={`tender-status status-${displayStatus.toLowerCase()}`}>{getStatusDisplayName(displayStatus)}</span>
+                        <span className={`badge temperature-${displayTemperature.toLowerCase()}`} style={{
+                          fontSize: '10px',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: displayTemperature === 'HOT' ? '#ff4d4d' : displayTemperature === 'WARM' ? '#ffa500' : '#3498db',
+                          color: 'white'
+                        }}>
+                          {displayTemperature}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="tender-body" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                      <div className="tender-details" style={{ flex: 1 }}>
+                        <div className="tender-detail">
+                          <i className="fas fa-hashtag"></i> Tender ID: {tender.tender_id || 'N/A'}
+                        </div>
+                        <div className="tender-detail">
+                          <i className="fas fa-map-marker-alt"></i> {tender.location || 'N/A'}
+                        </div>
+                        <div className="tender-detail">
+                          <i className="fas fa-rupee-sign"></i> {tender.estimated_value ? `₹${Number(tender.estimated_value).toLocaleString('en-IN')}` : 'Contact for value'}
+                        </div>
+                        <div className="tender-detail">
+                          <i className="fas fa-calendar-alt"></i> Deadline: {tender.bid_deadline ? new Date(tender.bid_deadline).toLocaleDateString() : 'N/A'}
+                        </div>
+                        <div className="tender-detail">
+                          <i className="fas fa-tag"></i> Category: {tender.category || 'General'}
+                        </div>
+                      </div>
+                      <div className="tender-actions" style={{ marginTop: 'auto' }}>
+                        <a href={tender.source_url || '#'} target="_blank" rel="noopener noreferrer" className="btn btn-outline-primary">
+                          <i className="fas fa-external-link-alt me-2"></i> Source
+                        </a>
+                        {isLocallyAccepted && isTenderCompleted && isTenderCompleted(tender) ? (
+                          <button className="btn btn-accept bid-completed" disabled>
+                            <i className="fas fa-check-circle me-2"></i> Bid Applied Successfully
+                          </button>
+                        ) : isLocallyAccepted ? (
+                          <button className="btn btn-accept accepted-state" disabled>
+                            <i className="fas fa-check me-2"></i> Accepted
+                          </button>
+                        ) : (
+                          <button
+                            className="btn btn-accept"
+                            onClick={() => {
+                              setAcceptedTenders(prev => new Set([...prev, tender.id]));
+                              if (handleAcceptTender) handleAcceptTender(tender.id);
+
+                              // Show success feedback
+                              const tenderCard = document.querySelector(`[data-tender-id="${tender.id}"]`);
+                              if (tenderCard) {
+                                tenderCard.classList.add('accept-animation');
+                                setTimeout(() => {
+                                  tenderCard.classList.remove('accept-animation');
+                                }, 1000);
+                              }
+                            }}
+                          >
+                            <i className="fas fa-check me-2"></i> Accept
+                          </button>
+                        )}
+                        <button className="btn btn-reject" onClick={() => {
+                          if (window.confirm(`Are you sure you want to reject this tender?`)) {
+                            if (handleRejectTender) handleRejectTender(tender.id);
+                          }
+                        }}>
+                          <i className="fas fa-times me-2"></i> Reject
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })
             ) : (
               <div className="col-12">
-                <div className="no-results">
+                <div className="no-results text-center py-5">
+                  <i className="fas fa-search-minus fa-3x mb-3 text-muted"></i>
                   <h4>No tenders found matching your criteria</h4>
                   <p>Try adjusting your filters or search terms</p>
                   <button className="btn btn-outline-primary" onClick={handleResetFilters}>
@@ -711,49 +579,20 @@ const Dashboard = ({ tenders, handleFilterChange, filter, handleAcceptTender, ha
               </div>
             )}
           </div>
-          
+
           {/* Pagination Controls */}
-          {filteredTenders.length > ITEMS_PER_PAGE && (
-            <div className="pagination-container d-flex justify-content-center mt-4">
-              <nav>
-                <ul className="pagination">
-                  <li className={`page-item ${currentPage === 1 ? 'disabled' : ''}`}>
-                    <button 
-                      className="page-link" 
-                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                      disabled={currentPage === 1}
-                    >
-                      Previous
-                    </button>
-                  </li>
-                  
-                  {Array.from({ length: totalPages }, (_, i) => i + 1).map(pageNumber => (
-                    <li key={pageNumber} className={`page-item ${currentPage === pageNumber ? 'active' : ''}`}>
-                      <button 
-                        className="page-link" 
-                        onClick={() => setCurrentPage(pageNumber)}
-                      >
-                        {pageNumber}
-                      </button>
-                    </li>
-                  ))}
-                  
-                  <li className={`page-item ${currentPage === totalPages ? 'disabled' : ''}`}>
-                    <button 
-                      className="page-link" 
-                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                      disabled={currentPage === totalPages}
-                    >
-                      Next
-                    </button>
-                  </li>
-                </ul>
-              </nav>
+          {totalPages > 1 && (
+            <div className="d-flex justify-content-center mt-4">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={(page) => setCurrentPage(page)}
+              />
             </div>
           )}
         </div>
       </section>
-      
+
 
     </>
   );

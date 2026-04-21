@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fallback Tenders Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .card {
+            background: white;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .card h3 {
+            margin: 0 0 10px 0;
+            color: #333;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            margin-right: 8px;
+        }
+        .badge-hot { background: #ff6b6b; color: white; }
+        .badge-trending { background: #4ecdc4; color: white; }
+        .badge-warm { background: #ffd93d; color: #333; }
+        .info { color: #666; margin: 5px 0; }
+    </style>
+</head>
+<body>
+    <h1>Fallback Tenders Test</h1>
+    <div id="tenders-container"></div>
+
+    <script type="module">
+        import { FALLBACK_TENDERS } from './src/utils/fallbackData.js';
+        
+        console.log('Fallback Tenders:', FALLBACK_TENDERS);
+        
+        const container = document.getElementById('tenders-container');
+        
+        if (FALLBACK_TENDERS && FALLBACK_TENDERS.length > 0) {
+            container.innerHTML = `<p style="color: green; font-weight: bold;">✓ Successfully loaded ${FALLBACK_TENDERS.length} fallback tenders</p>`;
+            
+            FALLBACK_TENDERS.forEach(tender => {
+                const card = document.createElement('div');
+                card.className = 'card';
+                card.innerHTML = `
+                    <h3>${tender.title}</h3>
+                    <div>
+                        <span class="badge badge-${tender.temperature.toLowerCase()}">${tender.temperature}</span>
+                        <span class="badge" style="background: #e0e0e0; color: #333;">${tender.status}</span>
+                    </div>
+                    <p class="info"><strong>Department:</strong> ${tender.department}</p>
+                    <p class="info"><strong>Location:</strong> ${tender.location}</p>
+                    <p class="info"><strong>Amount:</strong> ${tender.amount}</p>
+                    <p class="info"><strong>Deadline:</strong> ${tender.deadline}</p>
+                `;
+                container.appendChild(card);
+            });
+        } else {
+            container.innerHTML = '<p style="color: red;">✗ Failed to load fallback tenders</p>';
+        }
+    </script>
+</body>
+</html>

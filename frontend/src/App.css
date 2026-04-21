@@ -708,7 +708,144 @@ header {
   color: #1E8E3E;
 }
 
-/* Pagination Styles */
+/* Simplified Dashboard Pagination Styles */
+.pagination-controls-enhanced {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  padding: 1rem;
+}
+
+@media (min-width: 768px) {
+  .pagination-controls-enhanced {
+    flex-direction: row;
+    justify-content: space-between;
+  }
+}
+
+.pagination-btn {
+  padding: 0.75rem 1.5rem;
+  border: 1px solid #d1d5db;
+  background-color: white;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background-color: #f8fafc;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-pages-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.pagination-page-enhanced {
+  padding: 0.75rem 1rem;
+  border: 1px solid #d1d5db;
+  background-color: white;
+  color: #4b5563;
+  border-radius: 8px;
+  cursor: pointer;
+  min-width: 2.75rem;
+  text-align: center;
+  font-weight: 500;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-page-enhanced:hover {
+  background-color: #f1f5f9;
+  border-color: #94a3b8;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+.pagination-page-enhanced.active {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  border-color: #3498db;
+  box-shadow: 0 4px 12px rgba(52, 152, 219, 0.3);
+  transform: translateY(-1px);
+}
+
+.pagination-ellipsis-enhanced {
+  color: #94a3b8;
+  padding: 0.75rem 0.5rem;
+  background: transparent;
+  border: none;
+  cursor: default;
+  font-weight: 500;
+}
+
+/* Responsive Design for Enhanced Pagination */
+@media (max-width: 768px) {
+  .pagination-controls-enhanced {
+    padding: 1rem;
+    gap: 1rem;
+  }
+  
+  .pagination-btn {
+    padding: 0.6rem 1.2rem;
+    font-size: 0.9rem;
+  }
+  
+  .pagination-page-enhanced {
+    padding: 0.6rem 0.8rem;
+    min-width: 2.5rem;
+    font-size: 0.9rem;
+  }
+  
+  .pagination-pages-enhanced {
+    order: -1;
+  }
+}
+
+@media (max-width: 576px) {
+  .pagination-controls-enhanced {
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  
+  .pagination-btn {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .pagination-pages-enhanced {
+    order: 0;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .pagination-page-enhanced {
+    min-width: 2.25rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.85rem;
+  }
+}
+
+/* Existing Pagination Styles */
 .pagination-container {
   display: flex;
   justify-content: center;
@@ -879,19 +1016,17 @@ header {
   padding: 25px;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
-  border: 1px solid rgba(52, 152, 219, 0.1);
+  border: none;
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 320px;
 }
 
 .tender-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 4px;
-  background: linear-gradient(135deg, #3498db, #2ecc71);
+  display: none;
 }
 
 .tender-card:hover {
@@ -906,6 +1041,7 @@ header {
   margin-bottom: 20px;
   padding-bottom: 15px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  flex-shrink: 0;
 }
 
 .tender-title {
@@ -914,6 +1050,12 @@ header {
   color: #2c3e50;
   margin: 0;
   line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  height: 3.6em;
 }
 
 .tender-status {
@@ -923,6 +1065,7 @@ header {
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.5px;
+  flex-shrink: 0;
 }
 
 .accepted-status {
@@ -936,6 +1079,7 @@ header {
   flex-direction: column;
   gap: 12px;
   margin-bottom: 20px;
+  flex-grow: 1;
 }
 
 .tender-detail {
@@ -958,6 +1102,8 @@ header {
   gap: 10px;
   padding-top: 15px;
   border-top: 1px solid rgba(0, 0, 0, 0.05);
+  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .btn-outline-primary {
@@ -2356,7 +2502,7 @@ header {
   left: 0;
   width: 100%;
   height: 100%;
-  background: linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%);
+  background: #F0EEEB;
   z-index: -1;
 }
 
@@ -2364,6 +2510,10 @@ header {
   text-align: center;
   margin-bottom: 60px;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
 }
 
 .section-title::before {
@@ -2382,13 +2532,19 @@ header {
   font-weight: 700;
   font-size: 2.2rem;
   margin-bottom: 15px;
-  color: #333;
+  color: #191970 !important;
+  text-align: center;
+  font-family: 'Georgia', 'Times New Roman', serif;
   /* Removed text-shadow and gradient for brighter, solid color */
 }
 
 .section-title p {
-  color: #666;
+  color: #000000 !important;
   font-size: 1.1rem;
+}
+
+.dashboard .section-title p {
+  color: #000000 !important;
 }
 
 .section-title::after {
@@ -2405,30 +2561,22 @@ header {
 
 /* ENHANCED: Tender Cards with Transparency */
 .tender-card {
-  background: rgba(30, 30, 46, 0.8);
+  background: #FFFFFF;
   backdrop-filter: blur(10px);
   border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border: none;
   padding: 12px;
   margin-bottom: 12px;
   transition: all 0.3s ease;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
   height: 100%;
   max-width: 100%;
-  color: white;
+  color: #191970 !important;
+  overflow: visible;
 }
 
 .tender-card::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 5px;
-  background: var(--gradient);
-  transform: scaleX(0);
-  transform-origin: left;
-  transition: transform 0.4s ease;
+  display: none;
 }
 
 /* Removed hover effects as per user request */
@@ -2442,48 +2590,60 @@ header {
   /* Removed hover effects as per user request */
   transform: none;
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.1);
-  background: rgba(30, 30, 46, 0.8);
+  background: #FFFFFF;
 }
 .tender-card.trending {
-  border-left: 5px solid var(--accent);
+  border-left: none;
 }
 
 .tender-card.hot {
-  border-left: 5px solid var(--warning);
+  border-left: none;
 }
 
 .tender-card.warm {
-  border-left: 5px solid var(--success);
+  border-left: none;
 }
 
 .tender-header {
   padding: 12px 12px 8px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: none;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .tender-title {
-  font-weight: 500;
-  font-size: 1rem;
-  margin-bottom: 5px;
-  line-height: 1.2;
-  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+  line-height: 1.3;
+  color: #191970 !important;
+  font-family: 'Calibri', 'Segoe UI', sans-serif;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  max-height: 2.6em;
 }
 
 .tender-department {
-  color: var(--secondary);
-  font-size: 0.8rem;
-  font-weight: 300;
+  color: #191970 !important;
+  font-size: 0.75rem;
+  font-weight: 400;
+  opacity: 0.85;
 }
 
 .tender-status {
-  padding: 6px 15px;
-  border-radius: 50px;
-  font-size: 0.8rem;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.7rem;
   font-weight: 600;
   text-transform: uppercase;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .status-trending {
@@ -2554,19 +2714,23 @@ header {
 }
 
 .tender-detail {
-  flex: 1 0 50%;
-  margin-bottom: 8px;
+  flex: 1 0 auto;
+  margin-bottom: 0;
   display: flex;
   align-items: center;
-  font-size: 0.8rem;
+  font-size: 0.78rem;
+  color: #191970 !important;
+  line-height: 1.3;
+  padding: 3px 0;
 }
 
 .tender-detail i {
   margin-right: 6px;
   width: 14px;
   text-align: center;
-  color: var(--secondary);
-  font-size: 0.75rem;
+  color: #191970 !important;
+  font-size: 0.72rem;
+  flex-shrink: 0;
 }
 
 .tender-actions {
@@ -2577,16 +2741,19 @@ header {
 }
 
 .btn.btn-accept {
-  background: #4CAF50; /* Green color */
+  background: #4CAF50;
   color: white;
   border: none;
-  padding: 6px 16px;
-  border-radius: 5px;
-  font-weight: 400;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-weight: 500;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  font-size: 0.8rem;
+  justify-content: center;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn.btn-accept:hover {
@@ -2621,16 +2788,19 @@ header {
 }
 
 .btn.btn-reject {
-  background: #fb3223; /* Red color */
+  background: #fb3223;
   color: white;
   border: none;
-  padding: 6px 16px;
-  border-radius: 5px;
-  font-weight: 400;
+  padding: 7px 12px;
+  border-radius: 6px;
+  font-weight: 500;
   transition: all 0.3s ease;
   display: flex;
   align-items: center;
-  font-size: 0.8rem;
+  justify-content: center;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn.btn-reject:hover {
@@ -2640,12 +2810,15 @@ header {
 }
 
 .btn-outline-primary {
-  border: 1px solid var(--secondary);
-  color: var(--secondary);
-  font-weight: 300;
+  border: 1px solid #191970;
+  color: #191970;
+  font-weight: 500;
   transition: all 0.3s ease;
-  padding: 6px 16px;
-  font-size: 0.8rem;
+  padding: 7px 12px;
+  font-size: 0.75rem;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-outline-primary:hover {
@@ -2688,25 +2861,26 @@ header {
 
 /* Filter Controls - Visible Inline */
 .filter-controls {
-  background: rgba(255, 255, 255, 0.1);
+  background: #FFFFFF;
   backdrop-filter: blur(15px);
   border-radius: 10px;
   padding: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(0, 0, 0, 0.1);
   overflow: visible;
   position: relative;
   z-index: 1001; /* Ensure filter controls are above other elements */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
 }
 
 .filter-controls label {
   display: block;
-  color: white;
+  color: #000000;
   margin-bottom: 8px;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.85rem;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  opacity: 0.9;
+  opacity: 1;
 }
 
 .filter-controls label i {
@@ -2716,9 +2890,9 @@ header {
 
 .filter-controls select {
   width: 100%;
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #000000;
   padding: 10px 15px;
   border-radius: 8px;
   font-size: 0.9rem;
@@ -2732,24 +2906,24 @@ header {
   outline: none;
   border-color: #3498db;
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.3);
-  background: rgba(255, 255, 255, 0.2);
+  background: #FFFFFF;
 }
 
 .filter-controls select:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: #F8F9FA;
+  border-color: rgba(0, 0, 0, 0.3);
 }
 
 .filter-controls select option {
-  background: rgba(30, 30, 46, 0.95);
-  color: white;
+  background: #FFFFFF;
+  color: #000000;
 }
 
 .filter-controls .btn-outline-secondary {
-  background: rgba(255, 255, 255, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  color: white;
-  font-weight: 500;
+  background: #FFFFFF;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  color: #000000;
+  font-weight: 600;
   padding: 10px;
   border-radius: 8px;
   transition: all 0.3s ease;
@@ -2758,8 +2932,8 @@ header {
 }
 
 .filter-controls .btn-outline-secondary:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: #F8F9FA;
+  border: 1px solid rgba(0, 0, 0, 0.3);
   transform: translateY(-1px);
   box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
@@ -2966,6 +3140,15 @@ input.search-input::placeholder {
 .search-input-container .clear-btn:hover {
   background: #f0f0f0;
   color: #333;
+}
+
+.search-input-container .calendar-btn {
+  transition: all 0.3s ease;
+}
+
+.search-input-container .calendar-btn:hover {
+  color: #007bff;
+  transform: translateY(-50%) scale(1.1);
 }
 
 /* Dashboard Stats */

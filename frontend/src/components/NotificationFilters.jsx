@@ -1,11 +1,12 @@
 import React from 'react';
 
-const NotificationFilters = ({ filter, setFilter, unreadCount, starredCount }) => {
+const NotificationFilters = ({ filter, setFilter, unreadCount, starredCount, importantCount }) => {
   return (
     <div style={{
       display: 'flex',
       gap: '8px',
-      marginBottom: '16px'
+      marginBottom: '16px',
+      flexWrap: 'wrap'
     }}>
       <button
         onClick={() => setFilter('all')}
@@ -56,23 +57,7 @@ const NotificationFilters = ({ filter, setFilter, unreadCount, starredCount }) =
           </span>
         )}
       </button>
-      <button
-        onClick={() => setFilter('read')}
-        className={`filter-btn ${filter === 'read' ? 'active' : ''}`}
-        style={{
-          padding: '8px 16px',
-          border: '1px solid #e2e8f0',
-          backgroundColor: filter === 'read' ? '#f1f5f9' : 'white',
-          color: filter === 'read' ? '#1e293b' : '#64748b',
-          borderRadius: '6px',
-          cursor: 'pointer',
-          fontSize: '0.875rem',
-          fontWeight: filter === 'read' ? '600' : '500',
-          transition: 'all 0.2s ease'
-        }}
-      >
-        Read
-      </button>
+
       <button
         onClick={() => setFilter('starred')}
         className={`filter-btn ${filter === 'starred' ? 'active' : ''}`}
@@ -105,6 +90,58 @@ const NotificationFilters = ({ filter, setFilter, unreadCount, starredCount }) =
             {starredCount}
           </span>
         )}
+      </button>
+
+      <button
+        onClick={() => setFilter('important')}
+        className={`filter-btn ${filter === 'important' ? 'active' : ''}`}
+        style={{
+          padding: '8px 16px',
+          border: '1px solid #e2e8f0',
+          backgroundColor: filter === 'important' ? '#f1f5f9' : 'white',
+          color: filter === 'important' ? '#1e293b' : '#64748b',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontSize: '0.875rem',
+          fontWeight: filter === 'important' ? '600' : '500',
+          transition: 'all 0.2s ease',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px'
+        }}
+      >
+        <i className="fas fa-exclamation-circle" style={{ color: '#ef4444' }}></i>
+        Important
+        {importantCount > 0 && (
+          <span style={{
+            backgroundColor: '#ef4444',
+            color: 'white',
+            borderRadius: '12px',
+            padding: '1px 6px',
+            fontSize: '0.75rem',
+            marginLeft: '4px'
+          }}>
+            {importantCount}
+          </span>
+        )}
+      </button>
+
+      <button
+        onClick={() => setFilter('read')}
+        className={`filter-btn ${filter === 'read' ? 'active' : ''}`}
+        style={{
+          padding: '8px 16px',
+          border: '1px solid #e2e8f0',
+          backgroundColor: filter === 'read' ? '#f1f5f9' : 'white',
+          color: filter === 'read' ? '#1e293b' : '#64748b',
+          borderRadius: '6px',
+          cursor: 'pointer',
+          fontSize: '0.875rem',
+          fontWeight: filter === 'read' ? '600' : '500',
+          transition: 'all 0.2s ease'
+        }}
+      >
+        Read
       </button>
     </div>
   );

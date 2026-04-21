@@ -12,98 +12,13 @@ import TenderAssistant from './components/TenderAssistant';
 import PageHeader from './components/PageHeader';
 import AcceptedTendersTable from './components/AcceptedTendersTable';
 import { NotificationProvider } from './context/NotificationContext';
+import apiClient from './api/client';
+import { FALLBACK_TENDERS } from './utils/fallbackData';
+
 
 
 function App() {
-  // Sample tender data
-  const tenderData = [
-    {
-      id: 1,
-      title: "Solar Power Plant Installation - 50MW",
-      department: "Ministry of New and Renewable Energy",
-      location: "Odisha",
-      amount: "₹45.2 Crores",
-      deadline: "2023-12-15",
-      category: "solar power plant",
-      status: "pending",
-      source: "https://tendersodisha.gov.in/nicgep/app",
-      engineer: null,
-      currentStep: 0,
-      documents: {},
-      stepData: {}
-    },
-    {
-      id: 2,
-      title: "Street Light Installation - Smart City Project",
-      department: "Urban Development Department",
-      location: "Maharashtra",
-      amount: "₹12.7 Crores",
-      deadline: "2023-11-30",
-      category: "street light",
-      status: "pending",
-      source: "https://mahatenders.gov.in",
-      engineer: null,
-      currentStep: 0,
-      documents: {},
-      stepData: {}
-    },
-    {
-      id: 3,
-      title: "EV Charging Station Infrastructure",
-      department: "Ministry of Heavy Industries",
-      location: "Delhi",
-      amount: "₹8.9 Crores",
-      deadline: "2023-12-10",
-      category: "ev charger",
-      status: "trending",
-      source: "https://govtprocurement.delhi.gov.in/nicgep/app",
-      currentStep: 0,
-      documents: {},
-      stepData: {}
-    },
-    {
-      id: 4,
-      title: "BESS Implementation for Grid Stability",
-      department: "Power Grid Corporation of India",
-      location: "Karnataka",
-      amount: "₹32.5 Crores",
-      deadline: "2024-01-15",
-      category: "bess",
-      status: "hot",
-      source: "https://eproc.karnataka.gov.in/eprocportal/pages/index.jsp",
-      currentStep: 0,
-      documents: {},
-      stepData: {}
-    },
-    {
-      id: 5,
-      title: "Solar Pumping System for Agriculture",
-      department: "Department of Agriculture",
-      location: "Uttar Pradesh",
-      amount: "₹15.3 Crores",
-      deadline: "2023-12-05",
-      category: "pump solarization",
-      status: "hot",
-      source: "https://etender.up.nic.in/nicgep/app",
-      currentStep: 0,
-      documents: {},
-      stepData: {}
-    },
-    {
-      id: 6,
-      title: "Drone Surveillance for Infrastructure Projects",
-      department: "Ministry of Civil Aviation",
-      location: "Gujarat",
-      amount: "₹5.7 Crores",
-      deadline: "2023-11-25",
-      category: "drone",
-      status: "warm",
-      source: "https://gil.gujarat.gov.in/eprocurement",
-      currentStep: 0,
-      documents: {},
-      stepData: {}
-    }
-  ];
+
 
   // Enhanced Tender workflow steps with responsive design and engineer assignment
   const tenderSteps = [
@@ -267,31 +182,140 @@ function App() {
     }
   ]);
 
-  // Load tenders from localStorage or initialize with default data
-  const [tenders, setTenders] = useState(() => {
-    // Load accepted tenders from localStorage
-    const savedAcceptedTenders = localStorage.getItem('acceptedTenders');
-    const acceptedIds = savedAcceptedTenders ? new Set(JSON.parse(savedAcceptedTenders)) : new Set();
-    
-    // Update the initial tender data with accepted status if needed
-    return tenderData.map(tender => {
-      if (acceptedIds.has(tender.id)) {
-        return {
-          ...tender,
-          status: 'accepted',
-          originalStatus: tender.status, // Preserve original status
-          acceptanceDate: new Date().toISOString().split('T')[0] // Could store the actual date if saved separately
-        };
+  // Load tenders from API only
+  const [tenders, setTenders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  // Fetch real tender data from API through our backend
+  const fetchTenderData = async (retryCount = 0) => {
+    const maxRetries = 3;
+
+    try {
+      setLoading(true);
+      setError(null);
+
+      // Use our apiClient to fetch tenders
+      const data = await apiClient.getTenders();
+      console.log('API Response:', data);
+
+      // Handle different response formats (standard REST or paginated)
+      let tenderArray = [];
+      if (Array.isArray(data)) {
+        tenderArray = data;
+      } else if (data.results && Array.isArray(data.results)) {
+        tenderArray = data.results;
+      } else {
+        console.warn('Unexpected API response format:', data);
+        tenderArray = [];
       }
-      return {
-        ...tender,
-        originalStatus: tender.status // Store original status
-      };
-    });
-  });
-  
+
+      // Handle empty tender data gracefully
+      if (tenderArray.length === 0) {
+        console.log('No tenders available from API - showing empty state');
+        setTenders([]);
+        setLoading(false);
+        return;
+      }
+
+      // Transform API data to match our frontend structure
+      const transformedTenders = tenderArray.map((tender) => ({
+        id: tender.id,
+        external_id: tender.external_id,
+        tender_id: tender.tender_id || tender.id,
+        title: tender.title || 'Untitled Tender',
+        department: tender.department || 'N/A',
+        location: tender.location || 'India',
+        amount: tender.estimated_value ? `₹${(tender.estimated_value / 10000000).toFixed(2)} Crores` : (tender.amount || '₹0'),
+        deadline: tender.bid_deadline || tender.deadline || '2025-12-31',
+        category: (tender.category || 'general').toLowerCase(),
+        status: tender.status?.toLowerCase() || 'pending',
+        source: tender.source_url || tender.source || '#',
+        engineer: tender.assigned_engineer_name || null,
+        currentStep: tender.current_step || 0,
+        assignment_id: tender.workflow_id || null,
+        documents: {},
+
+        stepData: tender.step_data || {},
+        completedSteps: tender.workflow_completed_steps || 0,
+        totalSteps: tender.workflow_total_steps || 8,
+        originalStatus: tender.status?.toLowerCase() || 'pending',
+        is_deadline_approaching: tender.is_deadline_approaching,
+        days_until_deadline: tender.days_until_deadline,
+        temperature: tender.temperature || 'PENDING'
+      }));
+
+      // Load accepted tenders from localStorage as supplementary
+      const savedAcceptedTenders = localStorage.getItem('acceptedTenders');
+      const acceptedIds = savedAcceptedTenders ? new Set(JSON.parse(savedAcceptedTenders)) : new Set();
+
+      // Final merge: Status 'accepted' from backend or local storage
+      const finalTenders = transformedTenders.map(tender => {
+        if (tender.status === 'accepted' || acceptedIds.has(tender.id)) {
+          return {
+            ...tender,
+            status: 'accepted',
+            acceptanceDate: tender.acceptanceDate || new Date().toISOString().split('T')[0]
+          };
+        }
+        return tender;
+      });
+
+      console.log('Transformed tenders:', finalTenders);
+      setTenders(finalTenders);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching tender data (attempt ' + (retryCount + 1) + '):', err);
+
+      if (err.status === 401) {
+        setError('Please login to access real-time tender data.');
+        setTenders(FALLBACK_TENDERS);
+        return;
+      }
+
+      if (retryCount < maxRetries) {
+        setTimeout(() => {
+          fetchTenderData(retryCount + 1);
+        }, 2 ** retryCount * 1000);
+        return;
+      }
+
+      console.warn('Backend connection failed. Using fallback placeholder tenders.');
+      setError(`Failed to fetch real-time data: ${err.message || 'Server unreachable'}`);
+      setTenders(FALLBACK_TENDERS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchTenderData();
+  }, []);
+
+  // Check authentication status
+  useEffect(() => {
+    const token = localStorage.getItem('access_token');
+    if (!token && window.location.pathname === '/') {
+      console.log('User not logged in, using fallback data mode');
+    }
+  }, []);
+
+  // Fetch engineers
+  useEffect(() => {
+    const fetchEngineers = async () => {
+      try {
+        const data = await apiClient.getEngineers();
+        setEngineers(data);
+      } catch (err) {
+        console.error('Failed to fetch engineers:', err);
+      }
+    };
+    fetchEngineers();
+  }, []);
+
+
   const [filter, setFilter] = useState('all');
-  
+
   // Pagination state for accepted tenders
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(5);
@@ -309,7 +333,10 @@ function App() {
 
   const [addLeadModalOpen, setAddLeadModalOpen] = useState(false);
   const [assignEngineerModalOpen, setAssignEngineerModalOpen] = useState(false);
+  const [engineers, setEngineers] = useState([]);
+  const [workflowLoading, setWorkflowLoading] = useState(false);
   const [selectedTenderForAssignment, setSelectedTenderForAssignment] = useState(null);
+
   const [assignEngineerForm, setAssignEngineerForm] = useState({
     engineerName: '',
     engineerEmail: '',
@@ -452,13 +479,6 @@ Would you like me to take you to your profile page?`,
 Would you like me to guide you through the settings?`
   };
 
-  // Filter tenders by status
-  const filterTenders = (status) => {
-    if (status === 'all') {
-      return tenderData;
-    }
-    return tenderData.filter(tender => tender.status === status);
-  };
 
   // Handle filter change
   const handleFilterChange = (newFilter) => {
@@ -466,36 +486,63 @@ Would you like me to guide you through the settings?`
   };
 
   // Function to handle accepting a tender - initialize with step 1 unlocked
-  const handleAcceptTender = (id) => {
+  const handleAcceptTender = async (id) => {
+    try {
+      // Try to call backend to update status (may fail in demo mode)
+      await apiClient.updateTender(id, { status: 'ACCEPTED' });
+    } catch (err) {
+      // API call failed - this is expected in demo/offline mode
+      console.log('API call failed, using local demo mode for tender acceptance');
+    }
+
+    // Always update local state (works in both API and demo modes)
     setTenders(prevTenders =>
       prevTenders.map(tender =>
         tender.id === id
-          ? { 
-              ...tender, 
-              status: 'accepted', 
-              engineer: null, 
-              currentStep: 1, // Start with step 1 unlocked by default
-              acceptanceDate: new Date().toISOString().split('T')[0],
-              documents: tender.documents || {},
-              stepData: {} // Initialize step data storage
-            }
+          ? {
+            ...tender,
+            status: 'accepted',
+            engineer: null,
+            currentStep: 1,
+            acceptanceDate: new Date().toISOString().split('T')[0],
+            documents: tender.documents || {},
+            stepData: {}
+          }
           : tender
       )
     );
-    
-    // Update localStorage to persist the accepted tender
+
+    // Update localStorage for persistence
     const savedAcceptedTenders = localStorage.getItem('acceptedTenders');
     let acceptedIds = savedAcceptedTenders ? new Set(JSON.parse(savedAcceptedTenders)) : new Set();
     acceptedIds.add(id);
     localStorage.setItem('acceptedTenders', JSON.stringify([...acceptedIds]));
-    
+
     console.log(`Tender ${id} accepted! It will now appear in your Accepted Tenders dashboard.`);
   };
 
   // Handle reject tender
-  const handleRejectTender = (id) => {
-    setTenders(tenders.filter(tender => tender.id !== id));
+  const handleRejectTender = async (id) => {
+    try {
+      // Try to call backend to update status (may fail in demo mode)
+      await apiClient.updateTender(id, { status: 'REJECTED' });
+    } catch (err) {
+      // API call failed - this is expected in demo/offline mode
+      console.log('API call failed, using local demo mode for tender rejection');
+    }
+
+    // Always update local state (works in both API and demo modes)
+    setTenders(prevTenders =>
+      prevTenders.map(tender =>
+        tender.id === id
+          ? { ...tender, status: 'rejected' }
+          : tender
+      )
+    );
+
+    console.log(`Tender ${id} rejected.`);
   };
+
 
   // Function to check if a tender is completed (all 8 steps)
   const isTenderCompleted = (tender) => {
@@ -503,32 +550,40 @@ Would you like me to guide you through the settings?`
     if (tender.workflowCompleted === true) {
       return true;
     }
-    
+
     if (!tender.stepData) return false;
-    
+
     // Check if all 8 steps have been completed
     for (let i = 1; i <= 8; i++) {
       if (!tender.stepData[i] || !tender.stepData[i].completed) {
         return false;
       }
     }
-    
+
     return true;
   };
 
-  // Function to get tender progress
   const getTenderProgress = (tender) => {
+    // Use pre-calculated progress if available (from backend transformation)
+    if (tender.completedSteps !== undefined && tender.totalSteps !== undefined) {
+      return {
+        completedSteps: tender.completedSteps,
+        totalSteps: tender.totalSteps,
+        progressPercentage: tender.totalSteps > 0 ? Math.round((tender.completedSteps / tender.totalSteps) * 100) : 0
+      };
+    }
+
     const totalSteps = 8;
     let completedSteps = 0;
-    
+
     if (tender.stepData) {
       for (let i = 1; i <= totalSteps; i++) {
-        if (tender.stepData[i] && tender.stepData[i].completed) {
+        if (tender.stepData[i] && (tender.stepData[i].completed || tender.stepData[i].data)) {
           completedSteps++;
         }
       }
     }
-    
+
     return {
       completedSteps,
       totalSteps,
@@ -536,50 +591,45 @@ Would you like me to guide you through the settings?`
     };
   };
 
+
   // Function to get dynamic step label for accepted tenders table
   const getDynamicStepLabel = (tender) => {
-    // If no engineer is assigned yet, show Assign Engineer
-    if (!tender.engineer && !tender.step1Completed) {
+    // If workflow is completed, show Completed
+    if (tender.workflowCompleted || isTenderCompleted(tender)) {
+      return 'Workflow Completed';
+    }
+
+    // If no assignment exists yet
+    if (!tender.assignment_id && !tender.engineer) {
       return 'Assign Engineer';
     }
-    
-    // If engineer is assigned but workflow hasn't started, show Edit Engineer
-    if (tender.engineer && !tender.currentStep) {
-      return 'Edit Engineer';
+
+    // Get current step
+    const stepNo = tender.currentStep || 1;
+
+    if (stepNo === 1) {
+      return tender.assignment_id ? 'Assign Engineer (Edit)' : 'Assign Engineer';
     }
-    
-    // Get current step (default to 1 if not set)
-    const currentStep = tender.currentStep || 1;
-    
-    // If workflow is completed (all 8 steps), show completed status
-    if (isTenderCompleted(tender)) {
-      return 'Completed';
-    }
-    
-    // For steps 2-8, show the next step label
-    if (currentStep >= 1 && currentStep <= 7) {
-      return `Step ${currentStep + 1}`;
-    }
-    
-    // Default fallback
-    return 'Edit Engineer';
+
+    return `Step ${stepNo} (In Progress)`;
   };
-  
+
+
   // Function to get current step name and status
   const getCurrentStepInfo = (tender) => {
     const currentStep = tender.currentStep || 0;
     if (currentStep === 0) {
       return { name: 'Not Started', status: 'pending' };
     }
-    
+
     if (isTenderCompleted(tender)) {
       return { name: 'Completed', status: 'completed' };
     }
-    
+
     if (currentStep > tenderSteps.length) {
       return { name: 'Completed', status: 'completed' };
     }
-    
+
     const step = tenderSteps[currentStep - 1];
     return { name: step.title, status: 'in_progress' };
   };
@@ -590,7 +640,7 @@ Would you like me to guide you through the settings?`
     console.log('Workflow functionality removed for tender:', tender.id);
   };
 
-    // Removed engineer assignment functionality
+  // Removed engineer assignment functionality
 
   // Removed engineer unassignment functionality
 
@@ -610,10 +660,10 @@ Would you like me to guide you through the settings?`
               completedAt: new Date().toISOString()
             }
           };
-          
+
           // Calculate next step only if current step is being completed
           const nextStep = Math.min(stepId + 1, tenderSteps.length);
-          
+
           return {
             ...tender,
             currentStep: nextStep,
@@ -623,7 +673,7 @@ Would you like me to guide you through the settings?`
         return tender;
       })
     );
-    
+
     // Update selectedTender state if this tender is currently selected
     if (selectedTender && selectedTender.id === tenderId) {
       setSelectedTender(prev => {
@@ -635,9 +685,9 @@ Would you like me to guide you through the settings?`
             completedAt: new Date().toISOString()
           }
         };
-        
+
         const nextStep = Math.min(stepId + 1, tenderSteps.length);
-        
+
         return {
           ...prev,
           currentStep: nextStep,
@@ -656,9 +706,9 @@ Would you like me to guide you through the settings?`
 
   // Pagination functions for accepted tenders
   const getAcceptedTenders = () => {
-    return tenders.filter(tender => 
-      tender.status?.toLowerCase() === 'accepted' || 
-      tender.status?.toLowerCase() === 'submitted' || 
+    return tenders.filter(tender =>
+      tender.status?.toLowerCase() === 'accepted' ||
+      tender.status?.toLowerCase() === 'submitted' ||
       tender.workflowCompleted === true
     );
   };
@@ -695,7 +745,7 @@ Would you like me to guide you through the settings?`
   const getPageNumbers = () => {
     const totalPages = getTotalPages();
     const pages = [];
-    
+
     if (totalPages <= 5) {
       // Show all pages if 5 or fewer
       for (let i = 1; i <= totalPages; i++) {
@@ -704,33 +754,33 @@ Would you like me to guide you through the settings?`
     } else {
       // Show first page, current page, and last page with ellipsis
       pages.push(1);
-      
+
       if (currentPage > 3) {
         pages.push('ellipsis-start');
       }
-      
+
       // Add pages around current page
       for (let i = Math.max(2, currentPage - 1); i <= Math.min(totalPages - 1, currentPage + 1); i++) {
         if (i !== 1 && i !== totalPages) {
           pages.push(i);
         }
       }
-      
+
       if (currentPage < totalPages - 2) {
         pages.push('ellipsis-end');
       }
-      
+
       if (totalPages > 1) {
         pages.push(totalPages);
       }
     }
-    
+
     return pages;
   };
 
   const renderPageNumbers = () => {
     const pages = getPageNumbers();
-    
+
     return pages.map((page, index) => {
       if (page === 'ellipsis-start' || page === 'ellipsis-end') {
         return (
@@ -739,7 +789,7 @@ Would you like me to guide you through the settings?`
           </span>
         );
       }
-      
+
       return (
         <button
           key={page}
@@ -766,10 +816,10 @@ Would you like me to guide you through the settings?`
 
     // Set initial value
     handleResize();
-    
+
     // Add event listener
     window.addEventListener('resize', handleResize);
-    
+
     // Cleanup
     return () => window.removeEventListener('resize', handleResize);
   }, []);
@@ -801,106 +851,146 @@ Would you like me to guide you through the settings?`
     }
   };
 
-  // Handle bot message send
   // Handle assign engineer modal open
-  const handleOpenAssignEngineerModal = (tender) => {
+  const handleOpenAssignEngineerModal = async (tender) => {
     setSelectedTenderForAssignment(tender);
-    
-    // Always reset all forms to initial empty state for each tender
-    setAssignEngineerForm({
-      engineerName: '',
-      engineerEmail: '',
-      engineerPhone: '',
-      engineerSpecialization: '',
-      engineerExperience: '',
-      assignmentNotes: ''
-    });
-    
-    setStep2Form({
-      tenderDocument: null,
-      technicalBidSheet: null,
-      keyObservations: '',
-      complianceNotes: ''
-    });
-    
-    setStep3Form({
-      emdAmount: '',
-      tenderFee: '',
-      processingFee: '',
-      paymentMode: '',
-      requestedBy: '',
-      remarks: ''
-    });
-    
-    setStep4Form({
-      costingEngineer: '',
-      deadlineDate: '',
-      costScopeDescription: '',
-      referenceFiles: []
-    });
-    
-    setStep5Form({
-      portalName: '',
-      portalUrl: '',
-      loginId: '',
-      registrationStatus: '',
-      credentialsNotes: ''
-    });
-    
-    setStep6Form({
-      requiredDocuments: [],
-      checklist: {
-        aadhaar: false,
-        pan: false,
-        gst: false,
-        certificates: false
-      },
-      documentationStatus: ''
-    });
-    
-    setStep7Form({
-      paymentReferenceNo: '',
-      paymentDate: '',
-      amountPaid: '',
-      proofUpload: null,
-      paymentStatus: ''
-    });
-    
-    // Set current step based on tender progress
-    if (tender.workflowCompleted) {
-      // If workflow is already completed, don't open the modal
-      setAssignEngineerModalOpen(false);
-      setSelectedTenderForAssignment(null);
-      return;
-    } else if (tender.step7Completed) {
-      setCurrentStep(8);  // Move to next step after completing step 7
-    } else if (tender.step6Completed) {
-      setCurrentStep(7);  // Move to next step after completing step 6
-    } else if (tender.step5Completed) {
-      setCurrentStep(6);  // Move to next step after completing step 5
-    } else if (tender.step4Completed) {
-      setCurrentStep(5);  // Move to next step after completing step 4
-    } else if (tender.step3Completed) {
-      setCurrentStep(4);
-    } else if (tender.step2Completed) {
-      setCurrentStep(3);
-    } else if (tender.step1Completed) {
-      setCurrentStep(2);
-    } else {
+    setWorkflowLoading(true);
+
+    // Step 1: Initialize forms to empty/initial state
+    const resetForms = () => {
+      setAssignEngineerForm({
+        engineerId: '',
+        engineerName: '',
+        engineerEmail: '',
+        engineerPhone: '',
+        engineerSpecialization: '',
+        engineerExperience: '',
+        assignmentNotes: ''
+      });
+
+      setStep2Form({
+        tenderDocument: null,
+        technicalBidSheet: null,
+        keyObservations: '',
+        complianceNotes: ''
+      });
+
+      setStep3Form({
+        emdAmount: '',
+        tenderFee: '',
+        processingFee: '',
+        paymentMode: '',
+        requestedBy: '',
+        remarks: ''
+      });
+
+      setStep4Form({
+        costingEngineer: '',
+        deadlineDate: '',
+        costScopeDescription: '',
+        referenceFiles: []
+      });
+
+      setStep5Form({
+        portalName: '',
+        portalUrl: '',
+        loginId: '',
+        registrationStatus: '',
+        credentialsNotes: ''
+      });
+
+      setStep6Form({
+        requiredDocuments: [],
+        checklist: {
+          aadhaar: false,
+          pan: false,
+          gst: false,
+          certificates: false
+        },
+        documentationStatus: ''
+      });
+
+      setStep7Form({
+        paymentReferenceNo: '',
+        paymentDate: '',
+        amountPaid: '',
+        proofUpload: null,
+        paymentStatus: ''
+      });
+
       setCurrentStep(1);
+    };
+
+    try {
+      // Step 2: Check if this tender has an existing workflow assignment
+      if (tender.assignment_id) {
+        const workflowData = await apiClient.getWorkflow(tender.assignment_id);
+
+        // Populate Step 1 Data (Engineer)
+        if (workflowData.engineer) {
+          setAssignEngineerForm({
+            engineerId: workflowData.engineer.id || '',
+            engineerName: workflowData.engineer.name || '',
+            engineerEmail: workflowData.engineer.email || '',
+            engineerPhone: workflowData.engineer.phone || '',
+            engineerSpecialization: workflowData.engineer.specialization || '',
+            engineerExperience: workflowData.engineer.experience || '',
+            assignmentNotes: workflowData.notes || ''
+          });
+        }
+
+        // Populate other steps if data exists
+        if (workflowData.steps_data) {
+          const steps = workflowData.steps_data;
+          if (steps[2]) setStep2Form(prev => ({ ...prev, ...steps[2].data }));
+          if (steps[3]) setStep3Form(prev => ({ ...prev, ...steps[3].data }));
+          if (steps[4]) setStep4Form(prev => ({ ...prev, ...steps[4].data }));
+          if (steps[5]) setStep5Form(prev => ({ ...prev, ...steps[5].data }));
+          if (steps[6]) setStep6Form(prev => ({ ...prev, ...steps[6].data }));
+          if (steps[7]) setStep7Form(prev => ({ ...prev, ...steps[7].data }));
+        }
+
+        // Determine current step
+        if (workflowData.current_step) {
+          setCurrentStep(workflowData.current_step);
+        } else {
+          setCurrentStep(1);
+        }
+      } else {
+        // No assignment_id, check for local storage data as fallback or just reset
+        const savedDataStr = localStorage.getItem(`tender_${tender.id}_formData`);
+        if (savedDataStr) {
+          const savedData = JSON.parse(savedDataStr);
+          if (savedData.assignEngineerForm) setAssignEngineerForm(savedData.assignEngineerForm);
+          if (savedData.step2Form) setStep2Form(savedData.step2Form);
+          if (savedData.step3Form) setStep3Form(savedData.step3Form);
+          if (savedData.step4Form) setStep4Form(savedData.step4Form);
+          if (savedData.step5Form) setStep5Form(savedData.step5Form);
+          if (savedData.step6Form) setStep6Form(savedData.step6Form);
+          if (savedData.step7Form) setStep7Form(savedData.step7Form);
+          if (savedData.currentStep) setCurrentStep(savedData.currentStep);
+        } else {
+          resetForms();
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch workflow data:', err);
+      resetForms();
+    } finally {
+      setWorkflowLoading(false);
+      setAssignEngineerModalOpen(true);
     }
-    
-    setAssignEngineerModalOpen(true);
   };
+
 
   // Handle step 2 form change
   const handleStep2Change = (e) => {
     const { name, value, files } = e.target;
     setStep2Form(prev => {
-      const updatedForm = files ? 
-        { ...prev, [name]: files[0] } : 
+      const updatedForm = files ?
+        { ...prev, [name]: files[0] } :
         { ...prev, [name]: value };
-      
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: assignEngineerForm,
@@ -913,7 +1003,7 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
@@ -926,7 +1016,7 @@ Would you like me to guide you through the settings?`
         ...prev,
         [name]: value
       };
-      
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: assignEngineerForm,
@@ -939,7 +1029,7 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
@@ -948,10 +1038,10 @@ Would you like me to guide you through the settings?`
   const handleStep4Change = (e) => {
     const { name, value, files } = e.target;
     setStep4Form(prev => {
-      const updatedForm = files ? 
-        { ...prev, [name]: Array.from(files) } : 
+      const updatedForm = files ?
+        { ...prev, [name]: Array.from(files) } :
         { ...prev, [name]: value };
-      
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: assignEngineerForm,
@@ -964,11 +1054,11 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
-  
+
   // Handle step 5 form change
   const handleStep5Change = (e) => {
     const { name, value } = e.target;
@@ -977,7 +1067,7 @@ Would you like me to guide you through the settings?`
         ...prev,
         [name]: value
       };
-      
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: assignEngineerForm,
@@ -990,18 +1080,18 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
-  
+
   // Handle step 6 form change
   const handleStep6Change = (e) => {
     const { name, value, files, type, checked } = e.target;
-    
+
     setStep6Form(prev => {
       let updatedForm;
-      
+
       if (files) {
         // Handle file uploads
         updatedForm = {
@@ -1024,7 +1114,7 @@ Would you like me to guide you through the settings?`
           [name]: value
         };
       }
-      
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: assignEngineerForm,
@@ -1037,19 +1127,19 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
-  
+
   // Handle step 7 form change
   const handleStep7Change = (e) => {
     const { name, value, files } = e.target;
     setStep7Form(prev => {
-      const updatedForm = files ? 
-        { ...prev, [name]: files[0] } : 
+      const updatedForm = files ?
+        { ...prev, [name]: files[0] } :
         { ...prev, [name]: value };
-      
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: assignEngineerForm,
@@ -1062,302 +1152,383 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
 
   // Handle step 3 form submit
-  const handleStep3Submit = (e) => {
+  const handleStep3Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with step 3 data
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.saveWorkflowStep(selectedTenderForAssignment.assignment_id, 3, step3Form);
+      }
+
+      // Update the tender with step 3 data
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               step3Data: step3Form,
               step3Completed: true,
               currentStep: 4
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Step 3 Completed",
-      message: `Successfully completed Step 3 for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 4
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+            : tender
+        )
+      );
+
+      // Move to next step
+      handleNextStep();
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Step 3 Completed",
+        message: `Successfully completed Step 3 for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 4
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+    } catch (err) {
+      console.error('Failed to save Step 3:', err);
+      alert('Error saving step: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
 
+
   // Handle step 4 form submit
-  const handleStep4Submit = (e) => {
+  const handleStep4Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with step 4 data
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.saveWorkflowStep(selectedTenderForAssignment.assignment_id, 4, step4Form);
+      }
+
+      // Update the tender with step 4 data
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               step4Data: step4Form,
               step4Completed: true,
               currentStep: 5  // Move to next step after completing step 4
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Step 4 Completed",
-      message: `Successfully completed Step 4 for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 5
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+            : tender
+        )
+      );
+
+      // Move to next step
+      handleNextStep();
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Step 4 Completed",
+        message: `Successfully completed Step 4 for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 5
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+    } catch (err) {
+      console.error('Failed to save Step 4:', err);
+      alert('Error saving step: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
 
+
   // Handle step 5 form submit
-  const handleStep5Submit = (e) => {
+  const handleStep5Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with step 5 data
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.saveWorkflowStep(selectedTenderForAssignment.assignment_id, 5, step5Form);
+      }
+
+      // Update the tender with step 5 data
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               step5Data: step5Form,
               step5Completed: true,
               currentStep: 6  // Move to next step after completing step 5
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Step 5 Completed",
-      message: `Successfully completed Step 5 for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 6
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+            : tender
+        )
+      );
+
+      // Move to next step
+      handleNextStep();
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Step 5 Completed",
+        message: `Successfully completed Step 5 for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 6
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+    } catch (err) {
+      console.error('Failed to save Step 5:', err);
+      alert('Error saving step: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
-  
+
+
   // Handle step 6 form submit
-  const handleStep6Submit = (e) => {
+  const handleStep6Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with step 6 data
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.saveWorkflowStep(selectedTenderForAssignment.assignment_id, 6, step6Form);
+      }
+
+      // Update the tender with step 6 data
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               step6Data: step6Form,
               step6Completed: true,
               currentStep: 7  // Move to next step after completing step 6
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Step 6 Completed",
-      message: `Successfully completed Step 6 for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 7
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+            : tender
+        )
+      );
+
+      // Move to next step
+      handleNextStep();
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Step 6 Completed",
+        message: `Successfully completed Step 6 for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 7
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+    } catch (err) {
+      console.error('Failed to save Step 6:', err);
+      alert('Error saving step: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
-  
+
+
   // Handle step 7 form submit
-  const handleStep7Submit = (e) => {
+  const handleStep7Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with step 7 data
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.saveWorkflowStep(selectedTenderForAssignment.assignment_id, 7, step7Form);
+      }
+
+      // Update the tender with step 7 data
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               step7Data: step7Form,
               step7Completed: true,
               currentStep: 8  // Move to next step after completing step 7
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Step 7 Completed",
-      message: `Successfully completed Step 7 for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 8
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+            : tender
+        )
+      );
+
+      // Move to next step
+      handleNextStep();
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Step 7 Completed",
+        message: `Successfully completed Step 7 for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 8
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+    } catch (err) {
+      console.error('Failed to save Step 7:', err);
+      alert('Error saving step: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
-  
+
+
   // Handle step 8 form submit (final step - complete workflow)
-  const handleStep8Submit = (e) => {
+  const handleStep8Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender to mark workflow as completed
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.submitWorkflow(selectedTenderForAssignment.assignment_id);
+      }
+
+      // Update the tender to mark workflow as completed
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               stepsCompleted: 8,
               status: 'Submitted',
               workflowCompleted: true,
               completionDate: new Date().toISOString().split('T')[0]
             }
-          : tender
-      )
-    );
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Workflow Completed",
-      message: `Tender workflow completed successfully for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Close the modal
-    handleCloseAssignEngineerModal();
-    
-    // Clear form data from localStorage after completion
-    localStorage.removeItem(`tender_${selectedTenderForAssignment.id}_formData`);
+            : tender
+        )
+      );
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Workflow Completed",
+        message: `Tender workflow completed successfully for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Close the modal
+      handleCloseAssignEngineerModal();
+
+      // Clear form data from localStorage after completion
+      localStorage.removeItem(`tender_${selectedTenderForAssignment.id}_formData`);
+    } catch (err) {
+      console.error('Failed to submit workflow:', err);
+      alert('Error submitting workflow: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
-  
+
+
   // Handle move to next step
   const handleNextStep = () => {
-    const nextStep = currentStep + 1;
-    setCurrentStep(nextStep);
-    
-    // Save current step to localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: nextStep
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment?.id}_formData`, JSON.stringify(formData));
+    setCurrentStep(prevStep => {
+      const nextStep = prevStep + 1;
+
+      // Save current step to localStorage immediately with the new value
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: nextStep
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment?.id}_formData`, JSON.stringify(formData));
+
+      return nextStep;
+    });
   };
 
   // Handle back to previous step
   const handleBackStep = () => {
     const prevStep = currentStep - 1;
     setCurrentStep(prevStep);
-    
+
     // Save current step to localStorage
     const formData = {
       assignEngineerForm: assignEngineerForm,
@@ -1373,119 +1544,200 @@ Would you like me to guide you through the settings?`
   };
 
   // Handle step 2 form submit
-  const handleStep2Submit = (e) => {
+  const handleStep2Submit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with step 2 data
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      if (selectedTenderForAssignment?.assignment_id) {
+        await apiClient.saveWorkflowStep(selectedTenderForAssignment.assignment_id, 2, step2Form);
+      }
+
+      // Update the tender with step 2 data
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
               step2Data: step2Form,
               step2Completed: true,
               currentStep: 3
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Step 2 Completed",
-      message: `Successfully completed Step 2 for ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 3
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+            : tender
+        )
+      );
+
+      // Move to next step
+      setCurrentStep(prev => prev + 1);
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Step 2 Completed",
+        message: `Successfully completed Step 2 for ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 3
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+    } catch (err) {
+      console.error('Failed to save Step 2:', err);
+      alert('Error saving step: ' + err.message);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
 
+
   // Handle assign engineer form submit
-  const handleAssignEngineerSubmit = (e) => {
+  const handleAssignEngineerSubmit = async (e) => {
     e.preventDefault();
-    
-    // Update the tender with the assigned engineer
-    setTenders(prevTenders => 
-      prevTenders.map(tender => 
-        tender.id === selectedTenderForAssignment.id 
-          ? { 
-              ...tender, 
+    setWorkflowLoading(true);
+
+    try {
+      // Prepare extra data
+      const extraData = {
+        email: assignEngineerForm.engineerEmail,
+        phone: assignEngineerForm.engineerPhone,
+        specialization: assignEngineerForm.engineerSpecialization,
+        experience: assignEngineerForm.engineerExperience,
+        notes: assignEngineerForm.assignmentNotes
+      };
+
+      // Call API to start workflow
+      const response = await apiClient.startWorkflow(
+        selectedTenderForAssignment.id,
+        assignEngineerForm.engineerId, // Will be empty string or null if not set
+        assignEngineerForm.engineerName, // Pass the manual name
+        extraData
+      );
+
+      const assignmentId = response.assignment_id;
+
+      // Update the tender with the assigned engineer and assignment_id
+      setTenders(prevTenders =>
+        prevTenders.map(tender =>
+          tender.id === selectedTenderForAssignment.id
+            ? {
+              ...tender,
+              assignment_id: assignmentId,
               engineer: assignEngineerForm.engineerName,
               engineerDetails: assignEngineerForm,
               currentStep: 2,
               step1Completed: true
             }
-          : tender
-      )
-    );
-    
-    // Move to next step
-    handleNextStep();
-    
-    // Show success notification
-    setNotifications(prev => [{
-      id: Date.now(),
-      tenderId: selectedTenderForAssignment.id,
-      title: "Engineer Assigned",
-      message: `Successfully assigned ${assignEngineerForm.engineerName} to ${selectedTenderForAssignment.title}`,
-      type: "success",
-      icon: "fas fa-check-circle",
-      read: false
-    }, ...prev]);
-    
-    // Update localStorage with the updated tenders
-    const updatedTenders = tenders.map(tender => 
-      tender.id === selectedTenderForAssignment.id 
-        ? { 
-            ...tender, 
+            : tender
+        )
+      );
+
+      // Update selected tender state
+      setSelectedTenderForAssignment(prev => ({
+        ...prev,
+        assignment_id: assignmentId,
+        engineer: assignEngineerForm.engineerName,
+        engineerDetails: assignEngineerForm,
+        currentStep: 2,
+        step1Completed: true
+      }));
+
+      // Move to next step - Set explicitly to 2 since we just completed step 1
+      setCurrentStep(2);
+
+      // Save to local storage for step 2
+      const newFormData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 2
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(newFormData));
+
+      // Show success notification
+      setNotifications(prev => [{
+        id: Date.now(),
+        tenderId: selectedTenderForAssignment.id,
+        title: "Engineer Assigned",
+        message: `Successfully assigned ${assignEngineerForm.engineerName} to ${selectedTenderForAssignment.title}`,
+        type: "success",
+        icon: "fas fa-check-circle",
+        read: false
+      }, ...prev]);
+
+      // Update localStorage with the updated tenders
+      const updatedTenders = tenders.map(tender =>
+        tender.id === selectedTenderForAssignment.id
+          ? {
+            ...tender,
+            assignment_id: assignmentId,
             engineer: assignEngineerForm.engineerName,
             engineerDetails: assignEngineerForm,
             currentStep: 2,
             step1Completed: true
           }
-        : tender
-    );
-    
-    // Save the updated tenders to localStorage
-    const acceptedTenderIds = updatedTenders.filter(t => 
-      t.status?.toLowerCase() === 'accepted' || 
-      t.status?.toLowerCase() === 'submitted' || 
-      t.workflowCompleted === true || 
-      t.step1Completed
-    ).map(t => t.id);
-    localStorage.setItem('acceptedTenders', JSON.stringify(acceptedTenderIds));
-    
-    // Update form data in localStorage
-    const formData = {
-      assignEngineerForm: assignEngineerForm,
-      step2Form: step2Form,
-      step3Form: step3Form,
-      step4Form: step4Form,
-      step5Form: step5Form,
-      step6Form: step6Form,
-      step7Form: step7Form,
-      currentStep: 2
-    };
-    localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+          : tender
+      );
+
+      // Save the updated tenders to localStorage
+      const acceptedTenderIds = updatedTenders.filter(t =>
+        t.status?.toLowerCase() === 'accepted' ||
+        t.status?.toLowerCase() === 'submitted' ||
+        t.workflowCompleted === true ||
+        t.step1Completed
+      ).map(t => t.id);
+      localStorage.setItem('acceptedTenders', JSON.stringify(acceptedTenderIds));
+
+      // Update form data in localStorage
+      const formData = {
+        assignEngineerForm: assignEngineerForm,
+        step2Form: step2Form,
+        step3Form: step3Form,
+        step4Form: step4Form,
+        step5Form: step5Form,
+        step6Form: step6Form,
+        step7Form: step7Form,
+        currentStep: 2
+      };
+      localStorage.setItem(`tender_${selectedTenderForAssignment.id}_formData`, JSON.stringify(formData));
+
+    } catch (err) {
+      console.error('Failed to start workflow:', err);
+
+      // Check for authentication error
+      const isAuthError = err.status === 401 ||
+        (err.detail && err.detail.includes('Authentication credentials were not provided')) ||
+        (typeof err.error === 'string' && err.error.includes('Authentication credentials'));
+
+      if (isAuthError) {
+        alert('Your session has expired or you are not logged in. Redirecting to login page...');
+        window.location.href = '/login';
+        return;
+      }
+
+      // Display specific error from backend if available
+      const errorMessage = err.error || err.detail || err.message || 'Failed to start workflow. Please try again.';
+      alert('Error: ' + errorMessage);
+    } finally {
+      setWorkflowLoading(false);
+    }
   };
+
 
   const handleBotSend = () => {
     if (!botInput.trim()) return;
@@ -1571,7 +1823,7 @@ Would you like me to guide you through the settings?`
     if (tenderId) {
       localStorage.setItem(`tender_${tenderId}_formData`, JSON.stringify(formData));
       console.log(`Progress saved for tender ${tenderId}`);
-      
+
       if (showNotification) {
         // Add a brief notification that data was saved
         const saveNotification = {
@@ -1583,14 +1835,14 @@ Would you like me to guide you through the settings?`
           icon: "fas fa-save",
           read: false
         };
-        
+
         // We'll need to pass setNotifications to use it here
         // For now, we'll rely on the console log and localStorage
         console.log("Auto-save notification:", saveNotification);
       }
     }
   };
-  
+
   // Handle assign engineer modal close
   const handleCloseAssignEngineerModal = () => {
     setAssignEngineerModalOpen(false);
@@ -1603,11 +1855,26 @@ Would you like me to guide you through the settings?`
   const handleAssignEngineerChange = (e) => {
     const { name, value } = e.target;
     setAssignEngineerForm(prev => {
-      const updatedForm = {
+      let updatedForm = {
         ...prev,
         [name]: value
       };
-      
+
+      // If engineerId is changed, auto-populate details from the selected engineer
+      if (name === 'engineerId' && value) {
+        const selectedEng = engineers.find(eng => eng.id.toString() === value.toString());
+        if (selectedEng) {
+          updatedForm = {
+            ...updatedForm,
+            engineerName: selectedEng.name || '',
+            engineerEmail: selectedEng.email || '',
+            engineerPhone: selectedEng.phone || '',
+            engineerSpecialization: selectedEng.specialization || '',
+            engineerExperience: selectedEng.experience || ''
+          };
+        }
+      }
+
       // Auto-save all form data
       const formData = {
         assignEngineerForm: updatedForm,
@@ -1620,10 +1887,11 @@ Would you like me to guide you through the settings?`
         currentStep: currentStep
       };
       autoSaveFormData(selectedTenderForAssignment?.id, formData);
-      
+
       return updatedForm;
     });
   };
+
 
 
   const handleBotKeyPress = (e) => {
@@ -1789,7 +2057,7 @@ Would you like me to guide you through the settings?`
           return tender;
         })
       );
-      
+
       // Update selectedTender state if this tender is currently selected
       if (selectedTender && selectedTender.id === tenderId) {
         const updatedDocuments = { ...selectedTender.documents };
@@ -1804,7 +2072,7 @@ Would you like me to guide you through the settings?`
           uploadedAt: new Date().toISOString()
         }));
         updatedDocuments[stepId] = [...updatedDocuments[stepId], ...newDocuments];
-        
+
         setSelectedTender(prev => ({
           ...prev,
           documents: updatedDocuments
@@ -1827,14 +2095,14 @@ Would you like me to guide you through the settings?`
         return tender;
       })
     );
-    
+
     // Update selectedTender state if this tender is currently selected
     if (selectedTender && selectedTender.id === tenderId) {
       const updatedDocuments = { ...selectedTender.documents };
       if (updatedDocuments[stepId]) {
         updatedDocuments[stepId] = updatedDocuments[stepId].filter(doc => doc.id !== documentId);
       }
-      
+
       setSelectedTender(prev => ({
         ...prev,
         documents: updatedDocuments
@@ -1865,51 +2133,123 @@ Would you like me to guide you through the settings?`
     <NotificationProvider>
       <Header />
       <Hero />
-      <Dashboard
-        tenders={tenders}
-        handleFilterChange={handleFilterChange}
-        filter={filter}
-        handleAcceptTender={handleAcceptTender}
-        handleRejectTender={handleRejectTender}
-        isTenderCompleted={isTenderCompleted}
-      />
+      {loading ? (
+        <div style={{
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          minHeight: '400px',
+          padding: '40px'
+        }}>
+          <div style={{
+            textAlign: 'center',
+            padding: '30px',
+            backgroundColor: 'white',
+            borderRadius: '12px',
+            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.08)',
+            border: '1px solid rgba(52, 152, 219, 0.1)'
+          }}>
+            <div style={{
+              fontSize: '2rem',
+              marginBottom: '15px',
+              color: '#3498db'
+            }}>
+              <i className="fas fa-spinner fa-spin"></i>
+            </div>
+            <h3 style={{
+              color: '#2c3e50',
+              marginBottom: '10px',
+              fontWeight: '600'
+            }}>
+              Loading Tender Data
+            </h3>
+            <p style={{
+              color: '#7f8c8d',
+              fontSize: '1rem'
+            }}>
+              Fetching latest tender information from our servers...
+            </p>
+          </div>
+        </div>
+      ) : (
+        <>
+          {error && (
+            <div style={{
+              padding: '10px 20px',
+              backgroundColor: '#fff4e5',
+              borderBottom: '1px solid #ffe2b3',
+              color: '#663c00',
+              fontSize: '0.85rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '10px'
+            }}>
+              <i className="fas fa-exclamation-triangle"></i>
+              <span>Offline Mode: Showing placeholder tenders as real-time server connection failed.</span>
+              <button
+                onClick={() => fetchTenderData()}
+                style={{
+                  background: '#663c00',
+                  color: 'white',
+                  border: 'none',
+                  padding: '2px 8px',
+                  borderRadius: '4px',
+                  fontSize: '0.75rem',
+                  cursor: 'pointer'
+                }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          <Dashboard
+            handleFilterChange={handleFilterChange}
+            filter={filter}
+            handleAcceptTender={handleAcceptTender}
+            handleRejectTender={handleRejectTender}
+            isTenderCompleted={isTenderCompleted}
+            acceptedTenderIds={tenders.filter(t => t.status === 'accepted').map(t => t.id)}
+          />
+        </>
+      )}
       <section id="telecaller" className="telecaller-dashboard-used">
         <TelecallerDashboard />
       </section>
 
       {/* Accepted Tenders Section */}
       <section id="accepted-tenders" className="dashboard" style={{ padding: 0, background: '#F8F9FA' }}>
-        <PageHeader 
-          title="Accepted Tenders" 
+        <PageHeader
+          title="Accepted Tenders"
           subtitle="Here are the tenders you have successfully secured."
         />
-        
+
         {/* Accepted Tenders Content */}
         <div style={{ padding: '40px 20px', maxWidth: '1200px', margin: '0 auto' }}>
-          <div style={{ 
+          <div style={{
             background: '#FFFFFF',
             borderRadius: '8px',
             padding: '30px',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.05)',
             marginBottom: '2rem'
           }}>
-            <h2 style={{ 
+            <h2 style={{
               color: '#1F3A5F',
               marginBottom: '20px',
               fontSize: '28px'
             }}>
               Successfully Secured Tenders
             </h2>
-            <p style={{ 
+            <p style={{
               color: '#5A6B7B',
               lineHeight: '1.6',
               fontSize: '16px',
               marginBottom: '30px'
             }}>
-              Manage and track all your successfully secured tenders in one centralized location. 
+              Manage and track all your successfully secured tenders in one centralized location.
               Monitor progress, deadlines, and documentation requirements for each awarded project.
             </p>
-            
+
             {/* Professional Enterprise Data Table */}
             <div className="enterprise-tenders-table-container">
               <div className="table-wrapper">
@@ -1926,27 +2266,52 @@ Would you like me to guide you through the settings?`
                   </thead>
                   <tbody>
                     {/* Display paginated accepted tenders */}
-                    {getCurrentPageTenders().map(tender => (
+                    {getAcceptedTenders().length === 0 ? (
+                      <tr>
+                        <td colSpan="6" style={{ textAlign: 'center', padding: '40px 20px' }}>
+                          <div style={{ color: '#7f8c8d' }}>
+                            <i className="fas fa-inbox" style={{ fontSize: '3rem', marginBottom: '15px', display: 'block' }}></i>
+                            <h4 style={{ marginBottom: '10px', color: '#2c3e50' }}>No Accepted Tenders Yet</h4>
+                            <p style={{ marginBottom: '20px' }}>Browse the Tender Dashboard above and click "Accept" on tenders you're interested in.</p>
+                            <a 
+                              href="#dashboard" 
+                              style={{ 
+                                display: 'inline-block',
+                                padding: '10px 20px',
+                                background: '#3498db',
+                                color: 'white',
+                                textDecoration: 'none',
+                                borderRadius: '6px',
+                                fontWeight: '500'
+                              }}
+                            >
+                              <i className="fas fa-search"></i> Browse Tenders
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      getCurrentPageTenders().map(tender => (
                       <tr key={tender.id} className="table-row">
                         <td className="tender-title-cell">
-                                                  <a href={tender.source} target="_blank" rel="noopener noreferrer" className="tender-title-link">
-                                                    {tender.title}
-                                                  </a>
-                                                </td>
+                          <a href={tender.source} target="_blank" rel="noopener noreferrer" className="tender-title-link">
+                            {tender.title}
+                          </a>
+                        </td>
                         <td className="category-cell">{tender.category || tender.department || '—'}</td>
                         <td className="awarded-date-cell">
-                          {tender.acceptanceDate ? 
-                            new Date(tender.acceptanceDate).toLocaleDateString('en-US', { 
-                              year: 'numeric', 
-                              month: 'long', 
-                              day: 'numeric' 
-                            }) : 
-                            (tender.deadline ? 
-                              new Date(tender.deadline).toLocaleDateString('en-US', { 
-                                year: 'numeric', 
-                                month: 'long', 
-                                day: 'numeric' 
-                              }) : 
+                          {tender.acceptanceDate ?
+                            new Date(tender.acceptanceDate).toLocaleDateString('en-US', {
+                              year: 'numeric',
+                              month: 'long',
+                              day: 'numeric'
+                            }) :
+                            (tender.deadline ?
+                              new Date(tender.deadline).toLocaleDateString('en-US', {
+                                year: 'numeric',
+                                month: 'long',
+                                day: 'numeric'
+                              }) :
                               '—')
                           }
                         </td>
@@ -1967,20 +2332,20 @@ Would you like me to guide you through the settings?`
                             const stepInfo = getCurrentStepInfo(tender);
                             const isCompleted = isTenderCompleted(tender);
                             const percentage = progress.progressPercentage;
-                            
+
                             return (
                               <div className="progress-display-responsive">
                                 {/* Progress Bar Visualization */}
                                 <div className="progress-bar-container">
                                   <div className="progress-bar-track">
-                                    <div 
+                                    <div
                                       className="progress-bar-fill"
                                       style={{ width: `${percentage}%` }}
                                     ></div>
                                   </div>
                                   <div className="progress-percentage">{percentage}%</div>
                                 </div>
-                                
+
                                 {/* Steps Summary */}
                                 <div className="steps-summary">
                                   <div className="steps-count">
@@ -1990,21 +2355,21 @@ Would you like me to guide you through the settings?`
                                     {progress.completedSteps} completed
                                   </div>
                                 </div>
-                                
+
                                 {/* Current Status */}
                                 <div className="current-step-info">
                                   <div className="step-name">
-                                    {progress.completedSteps === 0 ? 'Not Started' : 
-                                     progress.completedSteps > 0 && progress.completedSteps < progress.totalSteps ? stepInfo.name : 
-                                     'All Steps Completed'}
+                                    {progress.completedSteps === 0 ? 'Not Started' :
+                                      progress.completedSteps > 0 && progress.completedSteps < progress.totalSteps ? stepInfo.name :
+                                        'All Steps Completed'}
                                   </div>
                                   <div className={`step-status-badge status-${progress.completedSteps === 0 ? 'pending' : progress.completedSteps > 0 && progress.completedSteps < progress.totalSteps ? 'in_progress' : 'completed'}`}>
-                                    {progress.completedSteps === 0 ? 'PENDING' : 
-                                     progress.completedSteps > 0 && progress.completedSteps < progress.totalSteps ? 'IN PROGRESS' : 
-                                     'COMPLETED'}
+                                    {progress.completedSteps === 0 ? 'PENDING' :
+                                      progress.completedSteps > 0 && progress.completedSteps < progress.totalSteps ? 'IN PROGRESS' :
+                                        'COMPLETED'}
                                   </div>
                                 </div>
-                                
+
                                 {/* Engineer Assignment Status */}
                                 <div className="engineer-status">
                                   <div className={tender.engineer ? "assigned-engineer" : "no-engineer"}>
@@ -2012,7 +2377,7 @@ Would you like me to guide you through the settings?`
                                     {tender.engineer && (
                                       <span className="engineer-name">{tender.engineer}</span>
                                     )}
-                                    <span 
+                                    <span
                                       onClick={() => handleOpenAssignEngineerModal(tender)}
                                       style={{ cursor: 'pointer', textDecoration: 'underline', marginLeft: tender.engineer ? '8px' : '0' }}
                                     >
@@ -2028,26 +2393,27 @@ Would you like me to guide you through the settings?`
                           {tender.amount || '—'}
                         </td>
                       </tr>
-                    ))}
+                    ))
+                    )}
                   </tbody>
                 </table>
               </div>
-              
+
               {/* Responsive Professional Pagination */}
               <div className="pagination-controls">
-                <button 
+                <button
                   className="pagination-btn pagination-prev"
                   onClick={handlePrevPage}
                   disabled={currentPage === 1}
                 >
                   <span>&laquo; Previous</span>
                 </button>
-                
+
                 <div className="pagination-pages">
                   {renderPageNumbers()}
                 </div>
-                
-                <button 
+
+                <button
                   className="pagination-btn pagination-next"
                   onClick={handleNextPage}
                   disabled={currentPage === getTotalPages()}
@@ -2055,7 +2421,7 @@ Would you like me to guide you through the settings?`
                   <span>Next &raquo;</span>
                 </button>
               </div>
-              
+
               {/* Items per page info */}
               <div className="pagination-info">
                 <span>
@@ -2095,14 +2461,14 @@ Would you like me to guide you through the settings?`
       {assignEngineerModalOpen && (
         <div className="modal fade show" style={{ display: 'block', backgroundColor: 'rgba(0,0,0,0.3)' }} id="assignEngineerModal" tabIndex="-1" aria-labelledby="assignEngineerModalLabel" aria-hidden="true">
           <div className="modal-dialog modal-dialog-centered modal-lg">
-            <div className="modal-content" style={{ 
-              backgroundColor: 'white', 
-              borderRadius: '16px', 
+            <div className="modal-content" style={{
+              backgroundColor: 'white',
+              borderRadius: '16px',
               boxShadow: '0 8px 32px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
               border: 'none'
             }}>
-              <div className="modal-header" style={{ 
-                backgroundColor: 'white', 
+              <div className="modal-header" style={{
+                backgroundColor: 'white',
                 borderBottom: '1px solid #e0e0e0',
                 padding: '24px 32px 16px 32px',
                 borderRadius: '16px 16px 0 0',
@@ -2111,30 +2477,30 @@ Would you like me to guide you through the settings?`
                 alignItems: 'center'
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                  <h5 className="modal-title" id="assignEngineerModalLabel" style={{ 
-                    color: '#212121', 
-                    fontSize: '1.5rem', 
+                  <h5 className="modal-title" id="assignEngineerModalLabel" style={{
+                    color: '#212121',
+                    fontSize: '1.5rem',
                     fontWeight: '500',
                     margin: 0
                   }}>
                     Assign Engineer to {selectedTenderForAssignment?.title || 'Tender'}
                   </h5>
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '8px', 
-                    fontSize: '0.875rem', 
-                    color: '#6c757d' 
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    fontSize: '0.875rem',
+                    color: '#6c757d'
                   }}>
                     <i className="fas fa-save" style={{ fontSize: '0.875rem' }}></i>
                     <span>Progress Auto-Saved</span>
                   </div>
                 </div>
-                <button 
-                  type="button" 
-                  onClick={handleCloseAssignEngineerModal} 
-                  aria-label="Close" 
-                  style={{ 
+                <button
+                  type="button"
+                  onClick={handleCloseAssignEngineerModal}
+                  aria-label="Close"
+                  style={{
                     background: 'transparent',
                     border: 'none',
                     color: '#757575',
@@ -2161,11 +2527,32 @@ Would you like me to guide you through the settings?`
                   <i className="fas fa-times"></i>
                 </button>
               </div>
-              <div className="modal-body" style={{ 
+              <div className="modal-body" style={{
                 backgroundColor: 'white',
-                padding: '16px 32px 24px 32px'
+                padding: '16px 32px 24px 32px',
+                position: 'relative'
               }}>
+                {workflowLoading && (
+                  <div style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(255, 255, 255, 0.7)',
+                    zIndex: 1000,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    borderRadius: '0 0 16px 16px'
+                  }}>
+                    <i className="fas fa-spinner fa-spin" style={{ fontSize: '2rem', color: '#1976d2', marginBottom: '16px' }}></i>
+                    <p style={{ color: '#616161', fontWeight: '500' }}>Processing workflow...</p>
+                  </div>
+                )}
                 {/* Form Data Summary - Visible across all steps */}
+
                 <div style={{
                   backgroundColor: '#f8f9fa',
                   borderRadius: '8px',
@@ -2181,11 +2568,11 @@ Would you like me to guide you through the settings?`
                     <i className="fas fa-info-circle" style={{ marginRight: '8px' }}></i>
                     Form Data Summary
                   </h6>
-                  
+
                   {/* Engineer Details */}
                   <div style={{ marginBottom: '12px' }}>
                     <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Engineer:</strong>
-                    <div style={{ 
+                    <div style={{
                       color: assignEngineerForm.engineerName ? '#28a745' : '#dc3545',
                       fontSize: '0.9rem',
                       marginTop: '4px'
@@ -2193,42 +2580,42 @@ Would you like me to guide you through the settings?`
                       {assignEngineerForm.engineerName || 'Not assigned yet'}
                     </div>
                   </div>
-                  
+
                   {/* Contact Information */}
                   <div style={{ marginBottom: '12px' }}>
                     <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Contact:</strong>
-                    <div style={{ 
+                    <div style={{
                       color: assignEngineerForm.engineerEmail && assignEngineerForm.engineerPhone ? '#28a745' : '#ffc107',
                       fontSize: '0.9rem',
                       marginTop: '4px'
                     }}>
-                      {assignEngineerForm.engineerEmail && assignEngineerForm.engineerPhone ? 
-                        `${assignEngineerForm.engineerEmail} | ${assignEngineerForm.engineerPhone}` : 
+                      {assignEngineerForm.engineerEmail && assignEngineerForm.engineerPhone ?
+                        `${assignEngineerForm.engineerEmail} | ${assignEngineerForm.engineerPhone}` :
                         'Email and phone required'
                       }
                     </div>
                   </div>
-                  
+
                   {/* Specialization and Experience */}
                   <div style={{ marginBottom: '12px' }}>
                     <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Qualifications:</strong>
-                    <div style={{ 
+                    <div style={{
                       color: assignEngineerForm.engineerSpecialization && assignEngineerForm.engineerExperience ? '#28a745' : '#ffc107',
                       fontSize: '0.9rem',
                       marginTop: '4px'
                     }}>
-                      {assignEngineerForm.engineerSpecialization && assignEngineerForm.engineerExperience ? 
-                        `${assignEngineerForm.engineerSpecialization} (${assignEngineerForm.engineerExperience} years)` : 
+                      {assignEngineerForm.engineerSpecialization && assignEngineerForm.engineerExperience ?
+                        `${assignEngineerForm.engineerSpecialization} (${assignEngineerForm.engineerExperience} years)` :
                         'Specialization and experience required'
                       }
                     </div>
                   </div>
-                  
+
                   {/* Notes */}
                   {assignEngineerForm.assignmentNotes && (
                     <div style={{ marginBottom: '12px' }}>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Notes:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#6c757d',
                         fontSize: '0.9rem',
                         marginTop: '4px',
@@ -2238,24 +2625,24 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Step 2 Data */}
                   {step2Form.keyObservations || step2Form.complianceNotes ? (
                     <div style={{ marginBottom: '12px' }}>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Technical Analysis:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
                       }}>
-                        {step2Form.keyObservations ? `Observations: ${step2Form.keyObservations.substring(0, 50)}...` : '' }
-                        {step2Form.complianceNotes ? ` | Compliance: ${step2Form.complianceNotes.substring(0, 30)}...` : '' }
+                        {step2Form.keyObservations ? `Observations: ${step2Form.keyObservations.substring(0, 50)}...` : ''}
+                        {step2Form.complianceNotes ? ` | Compliance: ${step2Form.complianceNotes.substring(0, 30)}...` : ''}
                       </div>
                     </div>
                   ) : currentStep > 1 && (
                     <div style={{ marginBottom: '12px' }}>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Technical Analysis:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#dc3545',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2264,20 +2651,20 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Step 3 Data */}
                   {step3Form.emdAmount || step3Form.tenderFee || step3Form.processingFee ? (
                     <div style={{ marginBottom: '12px' }}>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Financial Details:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
                       }}>
-                        EMD: ₹{step3Form.emdAmount || '0'} | Tender Fee: ₹{step3Form.tenderFee || '0'} | Processing: ₹{step3Form.processingFee || '0' }
+                        EMD: ₹{step3Form.emdAmount || '0'} | Tender Fee: ₹{step3Form.tenderFee || '0'} | Processing: ₹{step3Form.processingFee || '0'}
                       </div>
                       {step3Form.requestedBy && (
-                        <div style={{ 
+                        <div style={{
                           color: '#6c757d',
                           fontSize: '0.85rem',
                           marginTop: '2px'
@@ -2289,7 +2676,7 @@ Would you like me to guide you through the settings?`
                   ) : currentStep > 2 && (
                     <div style={{ marginBottom: '12px' }}>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Financial Details:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#dc3545',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2298,12 +2685,12 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Step 4 Data */}
                   {step4Form.costingEngineer || step4Form.deadlineDate || step4Form.costScopeDescription ? (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Costing Details:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2311,7 +2698,7 @@ Would you like me to guide you through the settings?`
                         Engineer: {step4Form.costingEngineer || 'N/A'} | Deadline: {step4Form.deadlineDate || 'N/A'}
                       </div>
                       {step4Form.costScopeDescription && (
-                        <div style={{ 
+                        <div style={{
                           color: '#6c757d',
                           fontSize: '0.85rem',
                           marginTop: '2px'
@@ -2320,7 +2707,7 @@ Would you like me to guide you through the settings?`
                         </div>
                       )}
                       {step4Form.referenceFiles && step4Form.referenceFiles.length > 0 && (
-                        <div style={{ 
+                        <div style={{
                           color: '#6c757d',
                           fontSize: '0.85rem',
                           marginTop: '2px'
@@ -2332,7 +2719,7 @@ Would you like me to guide you through the settings?`
                   ) : currentStep > 3 && (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Costing Details:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#dc3545',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2341,12 +2728,12 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Step 5 Data */}
                   {step5Form.portalName || step5Form.portalUrl || step5Form.loginId ? (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Portal Registration:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2354,7 +2741,7 @@ Would you like me to guide you through the settings?`
                         Portal: {step5Form.portalName || 'N/A'} | ID: {step5Form.loginId || 'N/A'}
                       </div>
                       {step5Form.registrationStatus && (
-                        <div style={{ 
+                        <div style={{
                           color: '#6c757d',
                           fontSize: '0.85rem',
                           marginTop: '2px'
@@ -2366,7 +2753,7 @@ Would you like me to guide you through the settings?`
                   ) : currentStep > 4 && (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Portal Registration:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#dc3545',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2375,12 +2762,12 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Step 6 Data */}
                   {step6Form.requiredDocuments.length > 0 || Object.values(step6Form.checklist).some(val => val) ? (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Documentation:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2388,7 +2775,7 @@ Would you like me to guide you through the settings?`
                         Documents: {step6Form.requiredDocuments.length} uploaded
                       </div>
                       {step6Form.documentationStatus && (
-                        <div style={{ 
+                        <div style={{
                           color: '#6c757d',
                           fontSize: '0.85rem',
                           marginTop: '2px'
@@ -2400,7 +2787,7 @@ Would you like me to guide you through the settings?`
                   ) : currentStep > 5 && (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Documentation:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#dc3545',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2409,12 +2796,12 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Step 7 Data */}
                   {step7Form.paymentReferenceNo || step7Form.amountPaid ? (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Payment Details:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2422,7 +2809,7 @@ Would you like me to guide you through the settings?`
                         Ref: {step7Form.paymentReferenceNo || 'N/A'} | Amount: ₹{step7Form.amountPaid || '0'}
                       </div>
                       {step7Form.paymentStatus && (
-                        <div style={{ 
+                        <div style={{
                           color: '#6c757d',
                           fontSize: '0.85rem',
                           marginTop: '2px'
@@ -2434,7 +2821,7 @@ Would you like me to guide you through the settings?`
                   ) : currentStep > 6 && (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Payment Details:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#dc3545',
                         fontSize: '0.9rem',
                         marginTop: '4px'
@@ -2443,19 +2830,19 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                   )}
-                  
+
                   {/* Workflow Completion Status */}
                   {currentStep === 8 && (
                     <div>
                       <strong style={{ color: '#6c757d', fontSize: '0.85rem' }}>Workflow Status:</strong>
-                      <div style={{ 
+                      <div style={{
                         color: '#28a745',
                         fontSize: '0.9rem',
                         marginTop: '4px'
                       }}>
                         Steps Completed: 8/8
                       </div>
-                      <div style={{ 
+                      <div style={{
                         color: '#17a2b8',
                         fontSize: '0.85rem',
                         marginTop: '2px'
@@ -2465,12 +2852,12 @@ Would you like me to guide you through the settings?`
                     </div>
                   )}
                 </div>
-                
+
                 {currentStep === 1 ? (
                   <form onSubmit={handleAssignEngineerSubmit}>
                     <div className="mb-4">
-                      <label htmlFor="engineerName" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="engineerName" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2485,11 +2872,11 @@ Would you like me to guide you through the settings?`
                         name="engineerName"
                         value={assignEngineerForm.engineerName}
                         onChange={handleAssignEngineerChange}
-                        placeholder="Enter engineer's full name"
+                        placeholder="Enter engineer name"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: assignEngineerForm.engineerName ? '#000000' : '#495057',
@@ -2500,249 +2887,250 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       />
                     </div>
-                  <div className="mb-4">
-                    <label htmlFor="engineerEmail" className="form-label" style={{ 
-                      color: '#212121', 
-                      fontWeight: '500',
-                      fontSize: '0.875rem',
-                      marginBottom: '8px',
-                      display: 'block'
-                    }}>
-                      Email Address
-                    </label>
-                    <input
-                      type="email"
-                      className="form-control"
-                      id="engineerEmail"
-                      name="engineerEmail"
-                      value={assignEngineerForm.engineerEmail}
-                      onChange={handleAssignEngineerChange}
-                      placeholder="Enter email address"
-                      required
-                      style={{ 
-                        borderColor: '#e0e0e0', 
-                        borderRadius: '8px', 
-                        padding: '12px 16px',
-                        fontSize: '1rem',
-                        color: assignEngineerForm.engineerEmail ? '#000000' : '#495057',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                      onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
-                      onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="engineerPhone" className="form-label" style={{ 
-                      color: '#212121', 
-                      fontWeight: '500',
-                      fontSize: '0.875rem',
-                      marginBottom: '8px',
-                      display: 'block'
-                    }}>
-                      Phone Number
-                    </label>
-                    <input
-                      type="tel"
-                      className="form-control"
-                      id="engineerPhone"
-                      name="engineerPhone"
-                      value={assignEngineerForm.engineerPhone}
-                      onChange={handleAssignEngineerChange}
-                      placeholder="Enter phone number"
-                      required
-                      style={{ 
-                        borderColor: '#e0e0e0', 
-                        borderRadius: '8px', 
-                        padding: '12px 16px',
-                        fontSize: '1rem',
-                        color: assignEngineerForm.engineerPhone ? '#000000' : '#495057',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                      onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
-                      onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="engineerSpecialization" className="form-label" style={{ 
-                      color: '#212121', 
-                      fontWeight: '500',
-                      fontSize: '0.875rem',
-                      marginBottom: '8px',
-                      display: 'block'
-                    }}>
-                      Specialization
-                    </label>
-                    <select
-                      className="form-control"
-                      id="engineerSpecialization"
-                      name="engineerSpecialization"
-                      value={assignEngineerForm.engineerSpecialization}
-                      onChange={handleAssignEngineerChange}
-                      required
-                      style={{ 
-                        borderColor: '#e0e0e0', 
-                        borderRadius: '8px', 
-                        padding: '12px 16px',
-                        fontSize: '1rem',
-                        color: assignEngineerForm.engineerSpecialization ? '#000000' : '#495057',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                        appearance: 'none',
-                        backgroundColor: 'white'
-                      }}
-                      onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
-                      onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
-                    >
-                      <option value="">Select specialization</option>
-                      <option value="Solar">Solar Projects</option>
-                      <option value="Construction">Construction</option>
-                      <option value="Electrical">Electrical Systems</option>
-                      <option value="Civil">Civil Engineering</option>
-                      <option value="Mechanical">Mechanical Systems</option>
-                      <option value="IT">IT & Software</option>
-                      <option value="Telecom">Telecommunications</option>
-                      <option value="HVAC">HVAC Systems</option>
-                      <option value="Plumbing">Plumbing</option>
-                      <option value="Architecture">Architecture</option>
-                      <option value="Environmental">Environmental</option>
-                      <option value="Chemical">Chemical Engineering</option>
-                    </select>
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="engineerExperience" className="form-label" style={{ 
-                      color: '#212121', 
-                      fontWeight: '500',
-                      fontSize: '0.875rem',
-                      marginBottom: '8px',
-                      display: 'block'
-                    }}>
-                      Years of Experience
-                    </label>
-                    <input
-                      type="number"
-                      className="form-control"
-                      id="engineerExperience"
-                      name="engineerExperience"
-                      value={assignEngineerForm.engineerExperience}
-                      onChange={handleAssignEngineerChange}
-                      min="1"
-                      max="50"
-                      placeholder="Enter years of experience"
-                      required
-                      style={{ 
-                        borderColor: '#e0e0e0', 
-                        borderRadius: '8px', 
-                        padding: '12px 16px',
-                        fontSize: '1rem',
-                        color: assignEngineerForm.engineerExperience ? '#000000' : '#495057',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
-                      }}
-                      onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
-                      onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
-                    />
-                  </div>
-                  <div className="mb-4">
-                    <label htmlFor="assignmentNotes" className="form-label" style={{ 
-                      color: '#212121', 
-                      fontWeight: '500',
-                      fontSize: '0.875rem',
-                      marginBottom: '8px',
-                      display: 'block'
-                    }}>
-                      Assignment Notes
-                    </label>
-                    <textarea
-                      className="form-control"
-                      id="assignmentNotes"
-                      name="assignmentNotes"
-                      value={assignEngineerForm.assignmentNotes}
-                      onChange={handleAssignEngineerChange}
-                      rows="3"
-                      placeholder="Add any special instructions or notes for the engineer"
-                      style={{ 
-                        borderColor: '#e0e0e0', 
-                        borderRadius: '8px', 
-                        padding: '12px 16px',
-                        fontSize: '1rem',
-                        color: assignEngineerForm.assignmentNotes ? '#000000' : '#495057',
-                        transition: 'all 0.2s ease',
-                        boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                        minHeight: '100px'
-                      }}
-                      onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
-                      onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
-                    ></textarea>
-                  </div>
-                  <div className="modal-footer" style={{ 
-                    borderTop: '1px solid #e0e0e0', 
-                    backgroundColor: 'white',
-                    padding: '24px 32px',
-                    borderRadius: '0 0 16px 16px',
-                    display: 'flex',
-                    justifyContent: 'flex-end',
-                    gap: '12px'
-                  }}>
-                    <button 
-                      type="button" 
-                      className="btn" 
-                      onClick={handleCloseAssignEngineerModal}
-                      style={{ 
-                        backgroundColor: 'transparent', 
-                        borderColor: '#e0e0e0',
-                        color: '#616161',
-                        padding: '10px 20px',
-                        borderRadius: '8px',
+
+                    <div className="mb-4">
+                      <label htmlFor="engineerEmail" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = '#f5f5f5';
-                        e.target.style.borderColor = '#bdbdbd';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = 'transparent';
-                        e.target.style.borderColor = '#e0e0e0';
-                      }}
-                    >
-                      Cancel
-                    </button>
-                    <button 
-                      type="submit" 
-                      className="btn"
-                      style={{ 
-                        backgroundColor: '#1976d2', 
-                        borderColor: '#1976d2',
-                        color: 'white',
-                        padding: '10px 24px',
-                        borderRadius: '8px',
+                        fontSize: '0.875rem',
+                        marginBottom: '8px',
+                        display: 'block'
+                      }}>
+                        Email Address
+                      </label>
+                      <input
+                        type="email"
+                        className="form-control"
+                        id="engineerEmail"
+                        name="engineerEmail"
+                        value={assignEngineerForm.engineerEmail}
+                        onChange={handleAssignEngineerChange}
+                        placeholder="Enter email address"
+                        required
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          fontSize: '1rem',
+                          color: assignEngineerForm.engineerEmail ? '#000000' : '#495057',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}
+                        onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
+                        onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label htmlFor="engineerPhone" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = '#1565c0';
-                        e.target.style.borderColor = '#1565c0';
-                        e.target.style.transform = 'translateY(-1px)';
-                        e.target.style.boxShadow = '0 4px 12px rgba(25, 118, 210, 0.3)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = '#1976d2';
-                        e.target.style.borderColor = '#1976d2';
-                        e.target.style.transform = 'translateY(0)';
-                        e.target.style.boxShadow = 'none';
-                      }}
-                    >
-                      Next Step
-                    </button>
-                  </div>
-                </form>
+                        fontSize: '0.875rem',
+                        marginBottom: '8px',
+                        display: 'block'
+                      }}>
+                        Phone Number
+                      </label>
+                      <input
+                        type="tel"
+                        className="form-control"
+                        id="engineerPhone"
+                        name="engineerPhone"
+                        value={assignEngineerForm.engineerPhone}
+                        onChange={handleAssignEngineerChange}
+                        placeholder="Enter phone number"
+                        required
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          fontSize: '1rem',
+                          color: assignEngineerForm.engineerPhone ? '#000000' : '#495057',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}
+                        onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
+                        onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label htmlFor="engineerSpecialization" className="form-label" style={{
+                        color: '#212121',
+                        fontWeight: '500',
+                        fontSize: '0.875rem',
+                        marginBottom: '8px',
+                        display: 'block'
+                      }}>
+                        Specialization
+                      </label>
+                      <select
+                        className="form-control"
+                        id="engineerSpecialization"
+                        name="engineerSpecialization"
+                        value={assignEngineerForm.engineerSpecialization}
+                        onChange={handleAssignEngineerChange}
+                        required
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          fontSize: '1rem',
+                          color: assignEngineerForm.engineerSpecialization ? '#000000' : '#495057',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                          appearance: 'none',
+                          backgroundColor: 'white'
+                        }}
+                        onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
+                        onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
+                      >
+                        <option value="">Select specialization</option>
+                        <option value="Solar">Solar Projects</option>
+                        <option value="Construction">Construction</option>
+                        <option value="Electrical">Electrical Systems</option>
+                        <option value="Civil">Civil Engineering</option>
+                        <option value="Mechanical">Mechanical Systems</option>
+                        <option value="IT">IT & Software</option>
+                        <option value="Telecom">Telecommunications</option>
+                        <option value="HVAC">HVAC Systems</option>
+                        <option value="Plumbing">Plumbing</option>
+                        <option value="Architecture">Architecture</option>
+                        <option value="Environmental">Environmental</option>
+                        <option value="Chemical">Chemical Engineering</option>
+                      </select>
+                    </div>
+                    <div className="mb-4">
+                      <label htmlFor="engineerExperience" className="form-label" style={{
+                        color: '#212121',
+                        fontWeight: '500',
+                        fontSize: '0.875rem',
+                        marginBottom: '8px',
+                        display: 'block'
+                      }}>
+                        Years of Experience
+                      </label>
+                      <input
+                        type="number"
+                        className="form-control"
+                        id="engineerExperience"
+                        name="engineerExperience"
+                        value={assignEngineerForm.engineerExperience}
+                        onChange={handleAssignEngineerChange}
+                        min="1"
+                        max="50"
+                        placeholder="Enter years of experience"
+                        required
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          fontSize: '1rem',
+                          color: assignEngineerForm.engineerExperience ? '#000000' : '#495057',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                        }}
+                        onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
+                        onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
+                      />
+                    </div>
+                    <div className="mb-4">
+                      <label htmlFor="assignmentNotes" className="form-label" style={{
+                        color: '#212121',
+                        fontWeight: '500',
+                        fontSize: '0.875rem',
+                        marginBottom: '8px',
+                        display: 'block'
+                      }}>
+                        Assignment Notes
+                      </label>
+                      <textarea
+                        className="form-control"
+                        id="assignmentNotes"
+                        name="assignmentNotes"
+                        value={assignEngineerForm.assignmentNotes}
+                        onChange={handleAssignEngineerChange}
+                        rows="3"
+                        placeholder="Add any special instructions or notes for the engineer"
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
+                          padding: '12px 16px',
+                          fontSize: '1rem',
+                          color: assignEngineerForm.assignmentNotes ? '#000000' : '#495057',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                          minHeight: '100px'
+                        }}
+                        onMouseEnter={(e) => e.target.style.boxShadow = '0 2px 6px rgba(0,0,0,0.1)'}
+                        onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
+                      ></textarea>
+                    </div>
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
+                      backgroundColor: 'white',
+                      padding: '24px 32px',
+                      borderRadius: '0 0 16px 16px',
+                      display: 'flex',
+                      justifyContent: 'flex-end',
+                      gap: '12px'
+                    }}>
+                      <button
+                        type="button"
+                        className="btn"
+                        onClick={handleCloseAssignEngineerModal}
+                        style={{
+                          backgroundColor: 'transparent',
+                          borderColor: '#e0e0e0',
+                          color: '#616161',
+                          padding: '10px 20px',
+                          borderRadius: '8px',
+                          fontWeight: '500',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = '#f5f5f5';
+                          e.target.style.borderColor = '#bdbdbd';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = 'transparent';
+                          e.target.style.borderColor = '#e0e0e0';
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="submit"
+                        className="btn"
+                        style={{
+                          backgroundColor: '#1976d2',
+                          borderColor: '#1976d2',
+                          color: 'white',
+                          padding: '10px 24px',
+                          borderRadius: '8px',
+                          fontWeight: '500',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.target.style.backgroundColor = '#1565c0';
+                          e.target.style.borderColor = '#1565c0';
+                          e.target.style.transform = 'translateY(-1px)';
+                          e.target.style.boxShadow = '0 4px 12px rgba(25, 118, 210, 0.3)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.target.style.backgroundColor = '#1976d2';
+                          e.target.style.borderColor = '#1976d2';
+                          e.target.style.transform = 'translateY(0)';
+                          e.target.style.boxShadow = 'none';
+                        }}
+                      >
+                        Next Step
+                      </button>
+                    </div>
+                  </form>
                 ) : currentStep === 2 ? (
                   <form onSubmit={handleStep2Submit}>
                     <div className="mb-4">
-                      <label htmlFor="tenderDocument" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="tenderDocument" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2757,9 +3145,9 @@ Would you like me to guide you through the settings?`
                         name="tenderDocument"
                         onChange={handleStep2Change}
                         accept=".pdf,.doc,.docx"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step2Form.tenderDocument ? '#000000' : '#495057',
@@ -2771,8 +3159,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="technicalBidSheet" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="technicalBidSheet" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2787,9 +3175,9 @@ Would you like me to guide you through the settings?`
                         name="technicalBidSheet"
                         onChange={handleStep2Change}
                         accept=".pdf,.doc,.docx"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step2Form.technicalBidSheet ? '#000000' : '#495057',
@@ -2801,8 +3189,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="keyObservations" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="keyObservations" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2818,9 +3206,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep2Change}
                         rows="3"
                         placeholder="Enter key observations"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step2Form.keyObservations ? '#000000' : '#495057',
@@ -2833,8 +3221,8 @@ Would you like me to guide you through the settings?`
                       ></textarea>
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="complianceNotes" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="complianceNotes" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2850,9 +3238,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep2Change}
                         rows="3"
                         placeholder="Enter compliance notes"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step2Form.complianceNotes ? '#000000' : '#495057',
@@ -2864,8 +3252,8 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       ></textarea>
                     </div>
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -2873,12 +3261,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -2897,11 +3285,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#1976d2', 
+                        style={{
+                          backgroundColor: '#1976d2',
                           borderColor: '#1976d2',
                           color: 'white',
                           padding: '10px 24px',
@@ -2929,8 +3317,8 @@ Would you like me to guide you through the settings?`
                 ) : currentStep === 3 ? (
                   <form onSubmit={handleStep3Submit}>
                     <div className="mb-4">
-                      <label htmlFor="emdAmount" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="emdAmount" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2949,9 +3337,9 @@ Would you like me to guide you through the settings?`
                         step="0.01"
                         placeholder="Enter EMD amount"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step3Form.emdAmount ? '#000000' : '#495057',
@@ -2963,8 +3351,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="tenderFee" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="tenderFee" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -2983,9 +3371,9 @@ Would you like me to guide you through the settings?`
                         step="0.01"
                         placeholder="Enter tender fee"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step3Form.tenderFee ? '#000000' : '#495057',
@@ -2997,8 +3385,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="processingFee" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="processingFee" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3017,9 +3405,9 @@ Would you like me to guide you through the settings?`
                         step="0.01"
                         placeholder="Enter processing fee"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step3Form.processingFee ? '#000000' : '#495057',
@@ -3031,8 +3419,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="paymentMode" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="paymentMode" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3047,9 +3435,9 @@ Would you like me to guide you through the settings?`
                         value={step3Form.paymentMode}
                         onChange={handleStep3Change}
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step3Form.paymentMode ? '#000000' : '#495057',
@@ -3068,8 +3456,8 @@ Would you like me to guide you through the settings?`
                       </select>
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="requestedBy" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="requestedBy" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3086,9 +3474,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep3Change}
                         placeholder="Enter requester name"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step3Form.requestedBy ? '#000000' : '#495057',
@@ -3100,8 +3488,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="remarks" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="remarks" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3117,9 +3505,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep3Change}
                         rows="3"
                         placeholder="Enter any additional remarks"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step3Form.remarks ? '#000000' : '#495057',
@@ -3131,8 +3519,8 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       ></textarea>
                     </div>
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -3140,12 +3528,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -3164,11 +3552,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#1976d2', 
+                        style={{
+                          backgroundColor: '#1976d2',
                           borderColor: '#1976d2',
                           color: 'white',
                           padding: '10px 24px',
@@ -3196,8 +3584,8 @@ Would you like me to guide you through the settings?`
                 ) : currentStep === 4 ? (
                   <form onSubmit={handleStep4Submit}>
                     <div className="mb-4">
-                      <label htmlFor="costingEngineer" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="costingEngineer" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3214,9 +3602,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep4Change}
                         placeholder="Enter costing engineer name"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step4Form.costingEngineer ? '#000000' : '#495057',
@@ -3228,8 +3616,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="deadlineDate" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="deadlineDate" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3245,9 +3633,9 @@ Would you like me to guide you through the settings?`
                         value={step4Form.deadlineDate}
                         onChange={handleStep4Change}
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step4Form.deadlineDate ? '#000000' : '#495057',
@@ -3259,8 +3647,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="costScopeDescription" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="costScopeDescription" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3276,9 +3664,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep4Change}
                         rows="4"
                         placeholder="Describe the cost scope and requirements"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step4Form.costScopeDescription ? '#000000' : '#495057',
@@ -3291,8 +3679,8 @@ Would you like me to guide you through the settings?`
                       ></textarea>
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="referenceFiles" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="referenceFiles" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3308,9 +3696,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep4Change}
                         multiple
                         accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step4Form.referenceFiles && step4Form.referenceFiles.length > 0 ? '#000000' : '#495057',
@@ -3321,7 +3709,7 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       />
                       {step4Form.referenceFiles && step4Form.referenceFiles.length > 0 && (
-                        <div style={{ 
+                        <div style={{
                           marginTop: '8px',
                           padding: '8px',
                           backgroundColor: '#f8f9fa',
@@ -3332,8 +3720,8 @@ Would you like me to guide you through the settings?`
                         </div>
                       )}
                     </div>
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -3341,12 +3729,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -3365,11 +3753,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#1976d2', 
+                        style={{
+                          backgroundColor: '#1976d2',
                           borderColor: '#1976d2',
                           color: 'white',
                           padding: '10px 24px',
@@ -3397,8 +3785,8 @@ Would you like me to guide you through the settings?`
                 ) : currentStep === 5 ? (
                   <form onSubmit={handleStep5Submit}>
                     <div className="mb-4">
-                      <label htmlFor="portalName" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="portalName" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3415,9 +3803,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep5Change}
                         placeholder="Enter portal name"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step5Form.portalName ? '#000000' : '#495057',
@@ -3429,8 +3817,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="portalUrl" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="portalUrl" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3447,9 +3835,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep5Change}
                         placeholder="https://example.com/portal"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step5Form.portalUrl ? '#000000' : '#495057',
@@ -3461,8 +3849,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="loginId" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="loginId" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3479,9 +3867,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep5Change}
                         placeholder="Enter login ID or email"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step5Form.loginId ? '#000000' : '#495057',
@@ -3493,8 +3881,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="registrationStatus" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="registrationStatus" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3509,9 +3897,9 @@ Would you like me to guide you through the settings?`
                         value={step5Form.registrationStatus}
                         onChange={handleStep5Change}
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step5Form.registrationStatus ? '#000000' : '#495057',
@@ -3529,8 +3917,8 @@ Would you like me to guide you through the settings?`
                       </select>
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="credentialsNotes" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="credentialsNotes" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3546,9 +3934,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep5Change}
                         rows="3"
                         placeholder="Add any important notes about credentials, security questions, recovery options, etc."
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step5Form.credentialsNotes ? '#000000' : '#495057',
@@ -3560,8 +3948,8 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       ></textarea>
                     </div>
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -3569,12 +3957,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -3593,11 +3981,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#1976d2', 
+                        style={{
+                          backgroundColor: '#1976d2',
                           borderColor: '#1976d2',
                           color: 'white',
                           padding: '10px 24px',
@@ -3625,8 +4013,8 @@ Would you like me to guide you through the settings?`
                 ) : currentStep === 6 ? (
                   <form onSubmit={handleStep6Submit}>
                     <div className="mb-4">
-                      <label htmlFor="requiredDocuments" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="requiredDocuments" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3642,9 +4030,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep6Change}
                         multiple
                         accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step6Form.requiredDocuments && step6Form.requiredDocuments.length > 0 ? '#000000' : '#495057',
@@ -3655,7 +4043,7 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       />
                       {step6Form.requiredDocuments.length > 0 && (
-                        <div style={{ 
+                        <div style={{
                           marginTop: '8px',
                           padding: '8px',
                           backgroundColor: '#f8f9fa',
@@ -3667,8 +4055,8 @@ Would you like me to guide you through the settings?`
                       )}
                     </div>
                     <div className="mb-4">
-                      <label className="form-label" style={{ 
-                        color: '#212121', 
+                      <label className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '12px',
@@ -3684,13 +4072,13 @@ Would you like me to guide you through the settings?`
                             name="aadhaar"
                             checked={step6Form.checklist.aadhaar}
                             onChange={handleStep6Change}
-                            style={{ 
+                            style={{
                               width: '18px',
                               height: '18px',
                               marginRight: '10px'
                             }}
                           />
-                          <label htmlFor="aadhaar" style={{ 
+                          <label htmlFor="aadhaar" style={{
                             margin: 0,
                             color: '#212121',
                             fontSize: '0.95rem'
@@ -3705,13 +4093,13 @@ Would you like me to guide you through the settings?`
                             name="pan"
                             checked={step6Form.checklist.pan}
                             onChange={handleStep6Change}
-                            style={{ 
+                            style={{
                               width: '18px',
                               height: '18px',
                               marginRight: '10px'
                             }}
                           />
-                          <label htmlFor="pan" style={{ 
+                          <label htmlFor="pan" style={{
                             margin: 0,
                             color: '#212121',
                             fontSize: '0.95rem'
@@ -3726,13 +4114,13 @@ Would you like me to guide you through the settings?`
                             name="gst"
                             checked={step6Form.checklist.gst}
                             onChange={handleStep6Change}
-                            style={{ 
+                            style={{
                               width: '18px',
                               height: '18px',
                               marginRight: '10px'
                             }}
                           />
-                          <label htmlFor="gst" style={{ 
+                          <label htmlFor="gst" style={{
                             margin: 0,
                             color: '#212121',
                             fontSize: '0.95rem'
@@ -3747,13 +4135,13 @@ Would you like me to guide you through the settings?`
                             name="certificates"
                             checked={step6Form.checklist.certificates}
                             onChange={handleStep6Change}
-                            style={{ 
+                            style={{
                               width: '18px',
                               height: '18px',
                               marginRight: '10px'
                             }}
                           />
-                          <label htmlFor="certificates" style={{ 
+                          <label htmlFor="certificates" style={{
                             margin: 0,
                             color: '#212121',
                             fontSize: '0.95rem'
@@ -3764,8 +4152,8 @@ Would you like me to guide you through the settings?`
                       </div>
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="documentationStatus" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="documentationStatus" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3779,9 +4167,9 @@ Would you like me to guide you through the settings?`
                         name="documentationStatus"
                         value={step6Form.documentationStatus}
                         onChange={handleStep6Change}
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step6Form.documentationStatus ? '#000000' : '#495057',
@@ -3800,8 +4188,8 @@ Would you like me to guide you through the settings?`
                         <option value="Incomplete">Incomplete</option>
                       </select>
                     </div>
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -3809,12 +4197,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -3833,11 +4221,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#1976d2', 
+                        style={{
+                          backgroundColor: '#1976d2',
                           borderColor: '#1976d2',
                           color: 'white',
                           padding: '10px 24px',
@@ -3865,8 +4253,8 @@ Would you like me to guide you through the settings?`
                 ) : currentStep === 7 ? (
                   <form onSubmit={handleStep7Submit}>
                     <div className="mb-4">
-                      <label htmlFor="paymentReferenceNo" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="paymentReferenceNo" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3883,9 +4271,9 @@ Would you like me to guide you through the settings?`
                         onChange={handleStep7Change}
                         placeholder="Enter payment reference number"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step7Form.paymentReferenceNo ? '#000000' : '#495057',
@@ -3897,8 +4285,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="paymentDate" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="paymentDate" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3914,9 +4302,9 @@ Would you like me to guide you through the settings?`
                         value={step7Form.paymentDate}
                         onChange={handleStep7Change}
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step7Form.paymentDate ? '#000000' : '#495057',
@@ -3928,8 +4316,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="amountPaid" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="amountPaid" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3948,9 +4336,9 @@ Would you like me to guide you through the settings?`
                         step="0.01"
                         placeholder="Enter amount paid"
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step7Form.amountPaid ? '#000000' : '#495057',
@@ -3962,8 +4350,8 @@ Would you like me to guide you through the settings?`
                       />
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="proofUpload" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="proofUpload" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -3978,9 +4366,9 @@ Would you like me to guide you through the settings?`
                         name="proofUpload"
                         onChange={handleStep7Change}
                         accept=".pdf,.jpg,.jpeg,.png"
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step7Form.proofUpload ? '#000000' : '#495057',
@@ -3991,7 +4379,7 @@ Would you like me to guide you through the settings?`
                         onMouseLeave={(e) => e.target.style.boxShadow = '0 1px 2px rgba(0,0,0,0.05)'}
                       />
                       {step7Form.proofUpload && (
-                        <div style={{ 
+                        <div style={{
                           marginTop: '8px',
                           padding: '8px',
                           backgroundColor: '#f8f9fa',
@@ -4003,8 +4391,8 @@ Would you like me to guide you through the settings?`
                       )}
                     </div>
                     <div className="mb-4">
-                      <label htmlFor="paymentStatus" className="form-label" style={{ 
-                        color: '#212121', 
+                      <label htmlFor="paymentStatus" className="form-label" style={{
+                        color: '#212121',
                         fontWeight: '500',
                         fontSize: '0.875rem',
                         marginBottom: '8px',
@@ -4019,9 +4407,9 @@ Would you like me to guide you through the settings?`
                         value={step7Form.paymentStatus}
                         onChange={handleStep7Change}
                         required
-                        style={{ 
-                          borderColor: '#e0e0e0', 
-                          borderRadius: '8px', 
+                        style={{
+                          borderColor: '#e0e0e0',
+                          borderRadius: '8px',
                           padding: '12px 16px',
                           fontSize: '1rem',
                           color: step7Form.paymentStatus ? '#000000' : '#495057',
@@ -4040,8 +4428,8 @@ Would you like me to guide you through the settings?`
                         <option value="Refunded">Refunded</option>
                       </select>
                     </div>
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -4049,12 +4437,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -4073,11 +4461,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#1976d2', 
+                        style={{
+                          backgroundColor: '#1976d2',
                           borderColor: '#1976d2',
                           color: 'white',
                           padding: '10px 24px',
@@ -4104,29 +4492,29 @@ Would you like me to guide you through the settings?`
                   </form>
                 ) : currentStep === 8 ? (
                   <form onSubmit={handleStep8Submit}>
-                    <div style={{ 
+                    <div style={{
                       textAlign: 'center',
                       padding: '40px 20px',
                       backgroundColor: '#f8f9fa',
                       borderRadius: '12px',
                       marginBottom: '24px'
                     }}>
-                      <div style={{ 
-                        fontSize: '3rem', 
+                      <div style={{
+                        fontSize: '3rem',
                         color: '#28a745',
                         marginBottom: '16px'
                       }}>
                         🎉
                       </div>
-                      <h3 style={{ 
-                        color: '#212121', 
+                      <h3 style={{
+                        color: '#212121',
                         marginBottom: '12px',
                         fontWeight: '600'
                       }}>
                         Workflow Complete!
                       </h3>
-                      <p style={{ 
-                        color: '#6c757d', 
+                      <p style={{
+                        color: '#6c757d',
                         fontSize: '1.1rem',
                         marginBottom: '24px'
                       }}>
@@ -4134,14 +4522,14 @@ Would you like me to guide you through the settings?`
                         <br />
                         You can now submit this tender workflow.
                       </p>
-                      <div style={{ 
+                      <div style={{
                         backgroundColor: 'white',
                         padding: '20px',
                         borderRadius: '8px',
                         border: '2px solid #28a745',
                         display: 'inline-block'
                       }}>
-                        <div style={{ 
+                        <div style={{
                           fontSize: '1.2rem',
                           fontWeight: '600',
                           color: '#28a745',
@@ -4149,7 +4537,7 @@ Would you like me to guide you through the settings?`
                         }}>
                           Steps Completed: 8/8
                         </div>
-                        <div style={{ 
+                        <div style={{
                           fontSize: '1rem',
                           color: '#17a2b8',
                           fontWeight: '500'
@@ -4158,9 +4546,9 @@ Would you like me to guide you through the settings?`
                         </div>
                       </div>
                     </div>
-                    
-                    <div className="modal-footer" style={{ 
-                      borderTop: '1px solid #e0e0e0', 
+
+                    <div className="modal-footer" style={{
+                      borderTop: '1px solid #e0e0e0',
                       backgroundColor: 'white',
                       padding: '24px 32px',
                       borderRadius: '0 0 16px 16px',
@@ -4168,12 +4556,12 @@ Would you like me to guide you through the settings?`
                       justifyContent: 'flex-end',
                       gap: '12px'
                     }}>
-                      <button 
-                        type="button" 
-                        className="btn" 
+                      <button
+                        type="button"
+                        className="btn"
                         onClick={handleBackStep}
-                        style={{ 
-                          backgroundColor: 'transparent', 
+                        style={{
+                          backgroundColor: 'transparent',
                           borderColor: '#e0e0e0',
                           color: '#616161',
                           padding: '10px 20px',
@@ -4192,11 +4580,11 @@ Would you like me to guide you through the settings?`
                       >
                         Back
                       </button>
-                      <button 
-                        type="submit" 
+                      <button
+                        type="submit"
                         className="btn"
-                        style={{ 
-                          backgroundColor: '#28a745', 
+                        style={{
+                          backgroundColor: '#28a745',
                           borderColor: '#28a745',
                           color: 'white',
                           padding: '10px 24px',

@@ -6,16 +6,26 @@ import NotificationActionsMenu from './NotificationActionsMenu';
 import PaginationControls from './PaginationControls';
 
 const NotificationPage = () => {
-  const { notifications, getUnreadCount, markAllAsRead } = useNotifications();
+  const { notifications, loading, error, getUnreadCount, markAllAsRead, fetchNotifications } = useNotifications();
   const [filter, setFilter] = useState('all');
+  const [searchTerm, setSearchTerm] = useState('');
   const [page, setPage] = useState(1);
   const itemsPerPage = 10;
 
-  // Filter notifications based on selected filter
+  // Filter notifications based on selected filter and search term
   const filteredNotifications = notifications.filter(notification => {
-    if (filter === 'unread') return !notification.read;
-    if (filter === 'read') return notification.read;
-    if (filter === 'starred') return notification.starred;
+    // Search term check
+    const matchesSearch = searchTerm === '' ||
+      notification.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      notification.message.toLowerCase().includes(searchTerm.toLowerCase());
+
+    if (!matchesSearch) return false;
+
+    // Filter type check
+    if (filter === 'unread') return !notification.read_at;
+    if (filter === 'read') return !!notification.read_at;
+    if (filter === 'starred') return notification.is_starred;
+    if (filter === 'important') return notification.is_important;
     return true;
   });
 
@@ -46,108 +56,168 @@ const NotificationPage = () => {
         scrollBehavior: 'smooth'
       }}>
         <div style={{ paddingBottom: '8px' }}>
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '20px'
-      }}>
-        <h1 style={{
-          margin: 0,
-          fontSize: '1.5rem',
-          fontWeight: '600',
-          color: '#1e293b'
-        }}>
-          Notifications
-        </h1>
-        <div style={{
-          display: 'flex',
-          gap: '10px'
-        }}>
-          <NotificationActionsMenu 
-            onMarkAllAsRead={handleMarkAllAsRead}
-            unreadCount={getUnreadCount()}
-          />
-        </div>
-      </div>
-
-      <NotificationFilters 
-        filter={filter}
-        setFilter={setFilter}
-        unreadCount={getUnreadCount()}
-        starredCount={notifications.filter(n => n.starred).length}
-      />
-
-      <div style={{
-        marginTop: '20px'
-      }}>
-        {currentNotifications.length === 0 ? (
           <div style={{
-            textAlign: 'center',
-            padding: '40px 20px',
-            color: '#64748b'
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '20px'
           }}>
-            <i className="fas fa-bell-slash" style={{
-              fontSize: '3rem',
-              marginBottom: '16px',
-              color: '#cbd5e1'
-            }}></i>
-            <h3 style={{
-              margin: '0 0 8px 0',
-              color: '#64748b',
-              fontWeight: '500'
-            }}>
-              No notifications
-            </h3>
-            <p style={{
+            <h1 style={{
               margin: 0,
-              color: '#94a3b8'
+              fontSize: '1.5rem',
+              fontWeight: '600',
+              color: '#1e293b'
             }}>
-              {filter === 'unread' 
-                ? 'You have no unread notifications' 
-                : filter === 'read' 
-                  ? 'You have no read notifications' 
-                  : 'You\'re all caught up!'}
-            </p>
-          </div>
-        ) : (
-          <div style={{
-            transition: 'all 0.3s ease',
-            animation: 'fadeIn 0.3s ease-in',
-            willChange: 'transform'
-          }}>
-            {currentNotifications.map((notification, index) => (
-              <div 
-                key={notification.id}
+              Notifications
+            </h1>
+            <div style={{
+              display: 'flex',
+              gap: '10px'
+            }}>
+              <button
+                onClick={() => fetchNotifications()}
                 style={{
-                  transition: 'all 0.3s ease',
-                  animation: `fadeIn 0.3s ease-in ${index * 0.05}s forwards`,
-                  opacity: 0
+                  background: 'none',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  color: '#64748b'
                 }}
+                title="Refresh"
               >
-                <NotificationItem 
-                  notification={notification} 
-                />
-              </div>
-            ))}
+                <i className={`fas fa-sync ${loading ? 'fa-spin' : ''}`}></i>
+              </button>
+              <NotificationActionsMenu
+                onMarkAllAsRead={handleMarkAllAsRead}
+                unreadCount={getUnreadCount()}
+              />
+            </div>
           </div>
-        )}
-      </div>
 
-      {filteredNotifications.length > itemsPerPage && (
-        <div style={{
-          marginTop: '20px',
-          display: 'flex',
-          justifyContent: 'center'
-        }}>
-          <PaginationControls 
-            currentPage={page}
-            totalPages={totalPages}
-            onPageChange={setPage}
+          <div style={{ marginBottom: '16px' }}>
+            <div style={{ position: 'relative' }}>
+              <i className="fas fa-search" style={{
+                position: 'absolute',
+                left: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: '#94a3b8'
+              }}></i>
+              <input
+                type="text"
+                placeholder="Search notifications..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 10px 10px 36px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '8px',
+                  fontSize: '0.875rem',
+                  outline: 'none',
+                  transition: 'border-color 0.2s'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#3b82f6'}
+                onBlur={(e) => e.target.style.borderColor = '#e2e8f0'}
+              />
+            </div>
+          </div>
+
+          <NotificationFilters
+            filter={filter}
+            setFilter={setFilter}
+            unreadCount={getUnreadCount()}
+            starredCount={notifications.filter(n => n.is_starred).length}
+            importantCount={notifications.filter(n => n.is_important).length}
           />
+
+          <div style={{
+            marginTop: '20px'
+          }}>
+            {loading ? (
+              <div style={{ textAlign: 'center', padding: '40px' }}>
+                <i className="fas fa-spinner fa-spin fa-2x text-blue-500"></i>
+                <p className="mt-2 text-slate-500">Loading notifications...</p>
+              </div>
+            ) : error ? (
+              <div style={{ textAlign: 'center', padding: '40px', color: '#ef4444' }}>
+                <i className="fas fa-exclamation-circle fa-2x mb-2"></i>
+                <p>{error}</p>
+                <button
+                  onClick={() => fetchNotifications()}
+                  className="mt-2 text-blue-500 underline"
+                >
+                  Try again
+                </button>
+              </div>
+            ) : currentNotifications.length === 0 ? (
+              <div style={{
+                textAlign: 'center',
+                padding: '40px 20px',
+                color: '#64748b'
+              }}>
+                <i className="fas fa-bell-slash" style={{
+                  fontSize: '3rem',
+                  marginBottom: '16px',
+                  color: '#cbd5e1'
+                }}></i>
+                <h3 style={{
+                  margin: '0 0 8px 0',
+                  color: '#64748b',
+                  fontWeight: '500'
+                }}>
+                  No notifications
+                </h3>
+                <p style={{
+                  margin: 0,
+                  color: '#94a3b8'
+                }}>
+                  {filter === 'unread'
+                    ? 'You have no unread notifications'
+                    : filter === 'read'
+                      ? 'You have no read notifications'
+                      : 'You\'re all caught up!'}
+                </p>
+              </div>
+            ) : (
+              <div style={{
+                transition: 'all 0.3s ease',
+                animation: 'fadeIn 0.3s ease-in',
+                willChange: 'transform'
+              }}>
+                {currentNotifications.map((notification, index) => (
+                  <div
+                    key={notification.id}
+                    style={{
+                      transition: 'all 0.3s ease',
+                      animation: `fadeIn 0.3s ease-in ${index * 0.05}s forwards`,
+                      opacity: 0
+                    }}
+                  >
+                    <NotificationItem
+                      notification={notification}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {filteredNotifications.length > itemsPerPage && (
+            <div style={{
+              marginTop: '20px',
+              display: 'flex',
+              justifyContent: 'center'
+            }}>
+              <PaginationControls
+                currentPage={page}
+                totalPages={totalPages}
+                onPageChange={setPage}
+              />
+            </div>
+          )}
         </div>
-      )}
-    </div>
       </div>
     </div>
   );

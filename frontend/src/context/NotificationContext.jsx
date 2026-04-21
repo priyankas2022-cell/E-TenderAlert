@@ -1,99 +1,90 @@
-import React, { createContext, useContext, useReducer } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useState } from 'react';
+import apiClient from '../api/client';
 
 // Notification Context
 const NotificationContext = createContext();
 
 // Initial state
 const initialState = {
-  notifications: [
-    {
-      id: 1,
-      title: 'New Tender Alert',
-      message: 'Solar panel installation tender has been published by Government of Maharashtra',
-      time: '2 minutes ago',
-      type: 'success',
-      category: 'Tenders',
-      read: false
-    },
-    {
-      id: 2,
-      title: 'Profile Updated',
-      message: 'Your profile information has been successfully updated',
-      time: '1 hour ago',
-      type: 'success',
-      category: 'Account',
-      read: true
-    },
-    {
-      id: 3,
-      title: 'Reminder: Follow-up Call',
-      message: 'Call Priya Sharma regarding street light quotation tomorrow at 10:00 AM',
-      time: '3 hours ago',
-      type: 'warning',
-      category: 'Telecaller',
-      read: false
-    }
-  ]
+  notifications: [],
+  loading: true,
+  error: null
 };
 
 // Action types
 const ACTIONS = {
+  SET_NOTIFICATIONS: 'SET_NOTIFICATIONS',
+  SET_LOADING: 'SET_LOADING',
+  SET_ERROR: 'SET_ERROR',
   ADD_NOTIFICATION: 'ADD_NOTIFICATION',
   MARK_AS_READ: 'MARK_AS_READ',
   MARK_AS_UNREAD: 'MARK_AS_UNREAD',
   MARK_ALL_AS_READ: 'MARK_ALL_AS_READ',
   DELETE_NOTIFICATION: 'DELETE_NOTIFICATION',
   CLEAR_NOTIFICATIONS: 'CLEAR_NOTIFICATIONS',
-  TOGGLE_STAR: 'TOGGLE_STAR'
+  TOGGLE_STAR: 'TOGGLE_STAR',
+  TOGGLE_IMPORTANT: 'TOGGLE_IMPORTANT'
 };
 
 // Reducer
 const notificationReducer = (state, action) => {
   switch (action.type) {
+    case ACTIONS.SET_NOTIFICATIONS:
+      return {
+        ...state,
+        notifications: action.payload,
+        loading: false,
+        error: null
+      };
+
+    case ACTIONS.SET_LOADING:
+      return {
+        ...state,
+        loading: action.payload
+      };
+
+    case ACTIONS.SET_ERROR:
+      return {
+        ...state,
+        error: action.payload,
+        loading: false
+      };
+
     case ACTIONS.ADD_NOTIFICATION:
       return {
         ...state,
-        notifications: [
-          {
-            id: Date.now(),
-            ...action.payload,
-            read: false,
-            starred: false, // Add starred property
-            time: 'Just now'
-          },
-          ...state.notifications
-        ]
+        notifications: [action.payload, ...state.notifications]
       };
-    
+
     case ACTIONS.MARK_AS_READ:
       return {
         ...state,
         notifications: state.notifications.map(notification =>
           notification.id === action.payload
-            ? { ...notification, read: true }
+            ? { ...notification, read_at: new Date().toISOString() }
             : notification
         )
       };
-    
+
     case ACTIONS.MARK_AS_UNREAD:
       return {
         ...state,
         notifications: state.notifications.map(notification =>
           notification.id === action.payload
-            ? { ...notification, read: false }
+            ? { ...notification, read_at: null }
             : notification
         )
       };
-    
+
     case ACTIONS.MARK_ALL_AS_READ:
       return {
         ...state,
         notifications: state.notifications.map(notification => ({
           ...notification,
-          read: true
+          read_at: notification.read_at || new Date().toISOString()
         }))
       };
-    
+
     case ACTIONS.DELETE_NOTIFICATION:
       return {
         ...state,
@@ -101,23 +92,33 @@ const notificationReducer = (state, action) => {
           notification => notification.id !== action.payload
         )
       };
-    
+
     case ACTIONS.TOGGLE_STAR:
       return {
         ...state,
         notifications: state.notifications.map(notification =>
           notification.id === action.payload
-            ? { ...notification, starred: !notification.starred }
+            ? { ...notification, is_starred: !notification.is_starred }
             : notification
         )
       };
-    
+
+    case ACTIONS.TOGGLE_IMPORTANT:
+      return {
+        ...state,
+        notifications: state.notifications.map(notification =>
+          notification.id === action.payload
+            ? { ...notification, is_important: !notification.is_important }
+            : notification
+        )
+      };
+
     case ACTIONS.CLEAR_NOTIFICATIONS:
       return {
         ...state,
         notifications: []
       };
-    
+
     default:
       return state;
   }
@@ -127,57 +128,80 @@ const notificationReducer = (state, action) => {
 export const NotificationProvider = ({ children }) => {
   const [state, dispatch] = useReducer(notificationReducer, initialState);
 
-  // Action creators
-  const addNotification = (notification) => {
-    dispatch({
-      type: ACTIONS.ADD_NOTIFICATION,
-      payload: notification
-    });
+  // Fetch notifications on mount
+  useEffect(() => {
+    fetchNotifications();
+  }, []);
+
+  const fetchNotifications = async () => {
+    dispatch({ type: ACTIONS.SET_LOADING, payload: true });
+    try {
+      const data = await apiClient.getNotifications();
+      // Ensure data is array (backend returns results if paginated)
+      const notifications = Array.isArray(data) ? data : (data.results || []);
+      dispatch({ type: ACTIONS.SET_NOTIFICATIONS, payload: notifications });
+    } catch (err) {
+      console.error('Failed to fetch notifications:', err);
+      dispatch({ type: ACTIONS.SET_ERROR, payload: 'Failed to load notifications' });
+    }
   };
 
-  const markAsRead = (id) => {
-    dispatch({
-      type: ACTIONS.MARK_AS_READ,
-      payload: id
-    });
+  const markAsRead = async (id) => {
+    try {
+      await apiClient.markNotificationRead(id);
+      dispatch({ type: ACTIONS.MARK_AS_READ, payload: id });
+    } catch (err) {
+      console.error('Failed to mark notification as read:', err);
+    }
   };
 
-  const markAsUnread = (id) => {
-    dispatch({
-      type: ACTIONS.MARK_AS_UNREAD,
-      payload: id
-    });
+  const markAsUnread = async (id) => {
+    // Currently API only has mark as read, but we can treat as PATCH read_at: null if needed
+    // For now, let's keep it local if API doesn't support unread
+    dispatch({ type: ACTIONS.MARK_AS_UNREAD, payload: id });
   };
 
-  const toggleStar = (id) => {
-    dispatch({
-      type: ACTIONS.TOGGLE_STAR,
-      payload: id
-    });
+  const toggleStar = async (id) => {
+    try {
+      await apiClient.toggleNotificationStar(id);
+      dispatch({ type: ACTIONS.TOGGLE_STAR, payload: id });
+    } catch (err) {
+      console.error('Failed to toggle notification star:', err);
+    }
   };
 
-  const markAllAsRead = () => {
-    dispatch({
-      type: ACTIONS.MARK_ALL_AS_READ
-    });
+  const toggleImportant = async (id) => {
+    try {
+      await apiClient.toggleNotificationImportant(id);
+      dispatch({ type: ACTIONS.TOGGLE_IMPORTANT, payload: id });
+    } catch (err) {
+      console.error('Failed to toggle notification importance:', err);
+    }
+  };
+
+  const markAllAsRead = async () => {
+    // API might not have mark all as read yet, handle individually for now
+    const unread = state.notifications.filter(n => !n.read_at);
+    try {
+      await Promise.all(unread.map(n => apiClient.markNotificationRead(n.id)));
+      dispatch({ type: ACTIONS.MARK_ALL_AS_READ });
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
+    }
   };
 
   const deleteNotification = (id) => {
-    dispatch({
-      type: ACTIONS.DELETE_NOTIFICATION,
-      payload: id
-    });
+    // API delete might be needed
+    dispatch({ type: ACTIONS.DELETE_NOTIFICATION, payload: id });
   };
 
   const clearNotifications = () => {
-    dispatch({
-      type: ACTIONS.CLEAR_NOTIFICATIONS
-    });
+    dispatch({ type: ACTIONS.CLEAR_NOTIFICATIONS });
   };
 
   // Get unread count
   const getUnreadCount = () => {
-    return state.notifications.filter(n => !n.read).length;
+    return state.notifications.filter(n => !n.read_at).length;
   };
 
   // Get all notifications
@@ -189,10 +213,13 @@ export const NotificationProvider = ({ children }) => {
     <NotificationContext.Provider
       value={{
         notifications: state.notifications,
-        addNotification,
+        loading: state.loading,
+        error: state.error,
+        fetchNotifications,
         markAsRead,
         markAsUnread,
         toggleStar,
+        toggleImportant,
         markAllAsRead,
         deleteNotification,
         clearNotifications,

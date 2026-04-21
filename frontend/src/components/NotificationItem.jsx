@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import { useNotifications } from '../context/NotificationContext';
 
 const NotificationItem = ({ notification }) => {
-  const { markAsRead, deleteNotification, toggleStar, markAsUnread } = useNotifications();
+  const { markAsRead, deleteNotification, toggleStar, toggleImportant, markAsUnread } = useNotifications();
   const [showDropdown, setShowDropdown] = useState(false);
 
   const handleClick = () => {
-    if (!notification.read) {
+    if (!notification.read_at) {
       markAsRead(notification.id);
     }
   };
 
   const handleToggleRead = () => {
-    if (notification.read) {
+    if (notification.read_at) {
       markAsUnread(notification.id);
     } else {
       markAsRead(notification.id);
@@ -21,6 +21,10 @@ const NotificationItem = ({ notification }) => {
 
   const handleToggleStar = () => {
     toggleStar(notification.id);
+  };
+
+  const handleToggleImportant = () => {
+    toggleImportant(notification.id);
   };
 
   const handleDelete = (e) => {
@@ -81,7 +85,7 @@ const NotificationItem = ({ notification }) => {
       </button>
 
       {/* Show delete button on hover */}
-      <div 
+      <div
         style={{
           position: 'absolute',
           top: '12px',
@@ -104,25 +108,25 @@ const NotificationItem = ({ notification }) => {
         width: '36px',
         height: '36px',
         borderRadius: '50%',
-        backgroundColor: notification.type === 'success' ? '#dcfce7' :
-                       notification.type === 'warning' ? '#ffedd5' :
-                       notification.type === 'error' ? '#fee2e2' : '#dbeafe',
+        backgroundColor: notification.category === 'SUCCESS' ? '#dcfce7' :
+          notification.category === 'WARNING' ? '#ffedd5' :
+            notification.category === 'SYSTEM' ? '#fee2e2' : '#dbeafe',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         flexShrink: 0
       }}>
-      {notification.starred && (
-        <i className="fas fa-star" style={{ color: '#f59e0b', fontSize: '0.8rem' }}></i>
-      )}
+        {notification.is_starred && (
+          <i className="fas fa-star" style={{ color: '#f59e0b', fontSize: '0.8rem', position: 'absolute' }}></i>
+        )}
         <i className={
-          notification.type === 'success' ? 'fas fa-check-circle' :
-          notification.type === 'warning' ? 'fas fa-exclamation-triangle' :
-          notification.type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'
+          notification.category === 'SUCCESS' ? 'fas fa-check-circle' :
+            notification.category === 'WARNING' ? 'fas fa-exclamation-triangle' :
+              notification.category === 'SYSTEM' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'
         } style={{
-          color: notification.type === 'success' ? '#16a34a' :
-                 notification.type === 'warning' ? '#ea580c' :
-                 notification.type === 'error' ? '#dc2626' : '#2563eb',
+          color: notification.category === 'SUCCESS' ? '#16a34a' :
+            notification.category === 'WARNING' ? '#ea580c' :
+              notification.category === 'SYSTEM' ? '#dc2626' : '#2563eb',
           fontSize: '1rem'
         }}></i>
       </div>
@@ -138,14 +142,14 @@ const NotificationItem = ({ notification }) => {
           <h4 style={{
             margin: 0,
             fontSize: '0.95rem',
-            fontWeight: notification.read ? '500' : '600',
+            fontWeight: notification.read_at ? '500' : '600',
             color: '#1e293b',
             lineHeight: '1.3'
           }}>
             {notification.title}
           </h4>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            {!notification.read && (
+            {!notification.read_at && (
               <div style={{
                 width: '8px',
                 height: '8px',
@@ -179,7 +183,7 @@ const NotificationItem = ({ notification }) => {
               >
                 <i className="fas fa-ellipsis-vertical"></i>
               </button>
-              
+
               {showDropdown && (
                 <div style={{
                   position: 'absolute',
@@ -222,8 +226,8 @@ const NotificationItem = ({ notification }) => {
                       e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   >
-                    <i className={`fas fa-${notification.read ? 'envelope' : 'check'}`}></i>
-                    {notification.read ? 'Mark as Unread' : 'Mark as Read'}
+                    <i className={`fas fa-${notification.read_at ? 'envelope' : 'check'}`}></i>
+                    {notification.read_at ? 'Mark as Unread' : 'Mark as Read'}
                   </button>
                   <button
                     onClick={(e) => {
@@ -252,8 +256,38 @@ const NotificationItem = ({ notification }) => {
                       e.currentTarget.style.backgroundColor = 'transparent';
                     }}
                   >
-                    <i className={`fas fa-star${notification.starred ? '' : '-o'}`} style={{ color: notification.starred ? '#f59e0b' : 'inherit' }}></i>
-                    {notification.starred ? 'Unstar' : 'Mark Important'}
+                    <i className={`fas fa-star`} style={{ color: notification.is_starred ? '#f59e0b' : '#94a3b8' }}></i>
+                    {notification.is_starred ? 'Unstar' : 'Star'}
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleToggleImportant();
+                      setShowDropdown(false);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      border: 'none',
+                      background: 'transparent',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      color: '#1e293b',
+                      fontSize: '0.875rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      borderRadius: '0'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#f1f5f9';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    <i className={`fas fa-exclamation-circle`} style={{ color: notification.is_important ? '#ef4444' : '#94a3b8' }}></i>
+                    {notification.is_important ? 'Unmark Important' : 'Mark Important'}
                   </button>
                   <hr style={{
                     margin: '0',
@@ -316,7 +350,7 @@ const NotificationItem = ({ notification }) => {
             fontSize: '0.75rem',
             color: '#94a3b8'
           }}>
-            {notification.time}
+            {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
           </span>
           {notification.category && (
             <span style={{

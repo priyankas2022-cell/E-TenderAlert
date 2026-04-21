@@ -2,20 +2,20 @@ import React, { useState, useEffect } from 'react';
 import { useNotifications } from '../context/NotificationContext';
 
 const Notifications = ({ isOpen, onClose }) => {
-  const { 
-    notifications: localNotifications, 
-    markAsRead, 
-    markAllAsRead, 
-    deleteNotification 
+  const {
+    notifications: localNotifications,
+    markAsRead,
+    markAllAsRead,
+    deleteNotification
   } = useNotifications();
 
   // Get unread count
-  const unreadCount = localNotifications.filter(n => !n.read).length;
+  const unreadCount = localNotifications.filter(n => !n.read_at).length;
 
   if (!isOpen) return null;
 
   return (
-    <div 
+    <div
       className="notifications-overlay"
       style={{
         position: 'fixed',
@@ -32,7 +32,7 @@ const Notifications = ({ isOpen, onClose }) => {
       }}
       onClick={onClose}
     >
-      <div 
+      <div
         className="notifications-panel"
         style={{
           width: '400px',
@@ -73,7 +73,7 @@ const Notifications = ({ isOpen, onClose }) => {
               </span>
             )}
           </h3>
-          <button 
+          <button
             onClick={onClose}
             style={{
               background: 'none',
@@ -156,22 +156,22 @@ const Notifications = ({ isOpen, onClose }) => {
             localNotifications.map((notification) => (
               <div
                 key={notification.id}
-                onClick={() => !notification.read && markAsRead(notification.id)}
+                onClick={() => !notification.read_at && markAsRead(notification.id)}
                 style={{
                   padding: '16px 20px',
                   borderBottom: '1px solid #f1f5f9',
                   cursor: 'pointer',
-                  backgroundColor: notification.read ? 'white' : '#f8fafc',
+                  backgroundColor: notification.read_at ? 'white' : '#f8fafc',
                   transition: 'all 0.3s ease',
                   position: 'relative',
                   animation: 'fadeIn 0.3s ease-out',
                   opacity: 1
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = notification.read ? '#f1f5f9' : '#f1f5f9';
+                  e.currentTarget.style.backgroundColor = notification.read_at ? '#f1f5f9' : '#f1f5f9';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = notification.read ? 'white' : '#f8fafc';
+                  e.currentTarget.style.backgroundColor = notification.read_at ? 'white' : '#f8fafc';
                 }}
               >
                 {/* Delete button */}
@@ -196,7 +196,7 @@ const Notifications = ({ isOpen, onClose }) => {
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.backgroundColor = '#fee2e2';
-                    e.currentTarget.style.color = '#ef4444';
+                    e.currentTarget.style.color = '#b91c1c';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.backgroundColor = 'transparent';
@@ -207,7 +207,7 @@ const Notifications = ({ isOpen, onClose }) => {
                 </button>
 
                 {/* Show delete button on hover */}
-                <div 
+                <div
                   style={{
                     position: 'absolute',
                     top: '12px',
@@ -231,22 +231,22 @@ const Notifications = ({ isOpen, onClose }) => {
                     width: '36px',
                     height: '36px',
                     borderRadius: '50%',
-                    backgroundColor: notification.type === 'success' ? '#dcfce7' :
-                                   notification.type === 'warning' ? '#ffedd5' :
-                                   notification.type === 'error' ? '#fee2e2' : '#dbeafe',
+                    backgroundColor: notification.category === 'SUCCESS' ? '#dcfce7' :
+                      notification.category === 'WARNING' ? '#ffedd5' :
+                        notification.category === 'SYSTEM' ? '#fee2e2' : '#dbeafe',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     flexShrink: 0
                   }}>
                     <i className={
-                      notification.type === 'success' ? 'fas fa-check-circle' :
-                      notification.type === 'warning' ? 'fas fa-exclamation-triangle' :
-                      notification.type === 'error' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'
+                      notification.category === 'SUCCESS' ? 'fas fa-check-circle' :
+                        notification.category === 'WARNING' ? 'fas fa-exclamation-triangle' :
+                          notification.category === 'SYSTEM' ? 'fas fa-exclamation-circle' : 'fas fa-info-circle'
                     } style={{
-                      color: notification.type === 'success' ? '#16a34a' :
-                             notification.type === 'warning' ? '#ea580c' :
-                             notification.type === 'error' ? '#dc2626' : '#2563eb',
+                      color: notification.category === 'SUCCESS' ? '#16a34a' :
+                        notification.category === 'WARNING' ? '#ea580c' :
+                          notification.category === 'SYSTEM' ? '#dc2626' : '#2563eb',
                       fontSize: '1rem'
                     }}></i>
                   </div>
@@ -262,13 +262,13 @@ const Notifications = ({ isOpen, onClose }) => {
                       <h4 style={{
                         margin: 0,
                         fontSize: '0.95rem',
-                        fontWeight: notification.read ? '500' : '600',
+                        fontWeight: notification.read_at ? '500' : '600',
                         color: '#1e293b',
                         lineHeight: '1.3'
                       }}>
                         {notification.title}
                       </h4>
-                      {!notification.read && (
+                      {!notification.read_at && (
                         <div style={{
                           width: '8px',
                           height: '8px',
@@ -294,7 +294,7 @@ const Notifications = ({ isOpen, onClose }) => {
                         fontSize: '0.75rem',
                         color: '#94a3b8'
                       }}>
-                        {notification.time}
+                        {notification.created_at ? new Date(notification.created_at).toLocaleString() : 'Just now'}
                       </span>
                       {notification.category && (
                         <span style={{
